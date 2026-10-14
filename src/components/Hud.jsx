@@ -1,4 +1,4 @@
-import { Brain, Crown, Heart, Utensils, Zap, Plus, Skull, Gem } from 'lucide-react';
+import { Brain, Crown, Heart, Utensils, Zap, Plus, Skull, Gem, LogOut } from 'lucide-react';
 import {
   PALIUM_COLOR,
   TITLES,
@@ -39,7 +39,7 @@ function minsLeft(until) {
   return Math.max(0, Math.ceil((until - Date.now()) / 60000));
 }
 
-export default function Hud({ player, onOpenEnergy, onOpenTitles }) {
+export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut }) {
   const { level, xp, need } = levelFromXp(player.xp);
   const hp = maxHp(player);
   const title = TITLES[player.activeTitle] ?? TITLES.wanderer;
@@ -100,13 +100,25 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles }) {
             )}
           </div>
         </div>
-        <div
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold tabular-nums"
-          style={{ borderColor: `${PALIUM_COLOR}55`, color: PALIUM_COLOR, background: `${PALIUM_COLOR}14`, boxShadow: `0 0 12px ${PALIUM_COLOR}33` }}
-          title="Палиум"
-        >
-          <Gem size={13} style={{ filter: `drop-shadow(0 0 4px ${PALIUM_COLOR})` }} />
-          {formatPalium(player.palium)}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div
+            className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold tabular-nums"
+            style={{ borderColor: `${PALIUM_COLOR}55`, color: PALIUM_COLOR, background: `${PALIUM_COLOR}14`, boxShadow: `0 0 12px ${PALIUM_COLOR}33` }}
+            title="Палиум"
+          >
+            <Gem size={13} style={{ filter: `drop-shadow(0 0 4px ${PALIUM_COLOR})` }} />
+            {formatPalium(player.palium)}
+          </div>
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-400 transition hover:border-red-500/50 hover:text-red-300"
+              title="Выйти"
+            >
+              <LogOut size={11} /> Выйти
+            </button>
+          )}
         </div>
       </div>
 

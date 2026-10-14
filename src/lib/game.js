@@ -348,9 +348,9 @@ function normalize(p) {
   return applyTimeSystems(checkAchievements(next)).player;
 }
 
-export function loadPlayer() {
+export function loadPlayer(storageKey = STORAGE_KEY) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     return raw ? normalize(JSON.parse(raw)) : null;
   } catch {
     return null;
@@ -403,8 +403,9 @@ export function applyTimeSystems(p, now = Date.now()) {
   return { player: next, events, changed };
 }
 
-export function savePlayer(p) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+export function savePlayer(p, storageKey = STORAGE_KEY) {
+  if (!p) return;
+  localStorage.setItem(storageKey, JSON.stringify(p));
 }
 
 function addTotals(totals, stat, values) {

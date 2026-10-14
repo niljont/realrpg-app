@@ -6,8 +6,6 @@ import {
   addPalium,
   formatPalium,
   levelFromXp,
-  statLevel,
-  STAT_META,
 } from './game';
 
 /* ---------- предметы ---------- */
@@ -122,7 +120,7 @@ export function masteryXpFactor(cooks = 0) {
   return 0;
 }
 
-export const COOKING_SKILL_BASE = 5; // очков навыка кулинарии за «полное» приготовление
+export const COOKING_SKILL_BASE = 1; // +1 навык на оранжевом; дальше угасает по WoW
 
 export function addCustomRecipe(p, { name, notes, ingredients }) {
   const title = (name || '').trim();
@@ -147,11 +145,9 @@ export function cookCustomRecipe(p, recipeId) {
   if (idx < 0) return { error: 'Рецепт не найден' };
   const recipe = list[idx];
   const factor = masteryXpFactor(recipe.cooks);
-  const skillGain = Math.round(COOKING_SKILL_BASE * factor * 10) / 10;
+  const skillGain = Math.round(COOKING_SKILL_BASE * factor * 100) / 100;
   const xpGain = Math.max(0, Math.round(12 * factor));
-  const wilGain = Math.max(0, Math.round(8 * factor));
   const events = [];
-  const prevWil = statLevel(p.statPoints.WIL);
   const prevLevel = levelFromXp(p.xp).level;
 
   const updated = { ...recipe, cooks: recipe.cooks + 1 };
@@ -163,8 +159,6 @@ export function cookCustomRecipe(p, recipeId) {
     customRecipes: nextRecipes,
     cookingSkill: (p.cookingSkill ?? 0) + skillGain,
     xp: p.xp + xpGain,
-    palium: addPalium(p.palium, p3(xpGain * 0.0001)),
-    statPoints: { ...p.statPoints, WIL: p.statPoints.WIL + wilGain },
     totals: { ...p.totals, meals: (p.totals.meals ?? 0) + 1 },
     world: { ...(p.world ?? {}), cooked: (p.world?.cooked ?? 0) + 1 },
   };
@@ -177,10 +171,6 @@ export function cookCustomRecipe(p, recipeId) {
     });
   } else {
     events.push({ type: 'gain', text: `«${recipe.name}» приготовлено · серый рецепт, навык не растёт` });
-  }
-
-  if (wilGain > 0 && statLevel(next.statPoints.WIL) > prevWil) {
-    events.push({ type: 'stat', text: `${STAT_META.WIL.label}: ${prevWil} → ${statLevel(next.statPoints.WIL)}` });
   }
 
   const newLevel = levelFromXp(next.xp).level;

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { BarChart3, Dumbbell, Hammer, Map, Trophy, UserRound } from 'lucide-react';
-import Onboarding from './components/Onboarding';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BarChart3, Dumbbell, Hammer, Map, Medal, Trophy, UserRound } from 'lucide-react';
+import AuthScreen from './components/AuthScreen';
 import Hud from './components/Hud';
 import EnergyModal from './components/EnergyModal';
 import StatusScreen from './components/StatusScreen';
@@ -9,9 +9,10 @@ import AnalyticsScreen from './components/AnalyticsScreen';
 import AchievementsScreen from './components/AchievementsScreen';
 import WorldScreen from './components/WorldScreen';
 import ProfessionsScreen from './components/ProfessionsScreen';
+import LeaderboardScreen from './components/LeaderboardScreen';
 import UnlockOverlay from './components/UnlockOverlay';
+import { useAuth } from './context/AuthContext';
 import {
-  STORAGE_KEY,
   applyTimeSystems,
   applyTraining,
   createPlayer,
@@ -20,6 +21,10 @@ import {
   savePlayer,
   sealResult,
 } from './lib/game';
+import {
+  createPlayerFromProfile,
+  fetchProfile,
+} from './lib/profileSync';
 import {
   addCustomRecipe,
   buyFromGoblin,
@@ -71,6 +76,7 @@ const TABS = [
   { id: 'world', label: 'Мир', Icon: Map },
   { id: 'professions', label: 'Профы', Icon: Hammer },
   { id: 'titles', label: 'Титулы', Icon: Trophy },
+  { id: 'rank', label: 'Рейтинг', Icon: Medal },
   { id: 'analytics', label: 'Графики', Icon: BarChart3 },
 ];
 
@@ -85,13 +91,16 @@ const TOAST_COLORS = {
 };
 
 export default function App() {
-  const [player, setPlayer] = useState(loadPlayer);
+  const { user, loading: authLoading, storageKey, syncPlayerToCloud, signOut } = useAuth();
+  const [player, setPlayer] = useState(null);
+  const [bootstrapping, setBootstrapping] = useState(false);
   const [tab, setTab] = useState('status');
   const [titlesSubTab, setTitlesSubTab] = useState('titles');
   const [modal, setModal] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [unlockId, setUnlockId] = useState(null);
   const [justUnlocked, setJustUnlocked] = useState(null);
+  const syncTimer = useRef(null);
 
   const notify = useCallback((events) => {
     const items = (events ?? []).filter((e) => e.type !== 'achievement').map((e) => ({ ...e, id: crypto.randomUUID() }));
@@ -120,9 +129,56 @@ export default function App() {
     [notify],
   );
 
+  // Загрузка локального сейва / профиля при входе.
   useEffect(() => {
-    if (player) savePlayer(player);
-  }, [player]);
+    if (authLoading) return undefined;
+    if (!user?.id || !storageKey) {
+      setPlayer(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setBootstrapping(true);
+
+    (async () => {
+      try {
+        let local = loadPlayer(storageKey);
+        let cloud = null;
+        try {
+          cloud = await fetchProfile(user.id);
+        } catch {
+          cloud = null;
+        }
+
+        if (!local) {
+          local = cloud
+            ? createPlayerFromProfile(cloud)
+            : createPlayer(cloud?.username || user.user_metadata?.username || 'Игрок', 'male');
+        } else if (cloud?.username && local.name !== cloud.username) {
+          local = { ...local, name: cloud.username };
+        }
+
+        if (!cancelled) setPlayer(local);
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id, storageKey]);
+
+  // Локальное сохранение + debounce-синк в Supabase.
+  useEffect(() => {
+    if (!player || !storageKey || !user?.id) return undefined;
+    savePlayer(player, storageKey);
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      syncPlayerToCloud(player);
+    }, 400);
+    return () => clearTimeout(syncTimer.current);
+  }, [player, storageKey, user?.id, syncPlayerToCloud]);
 
   // Пассивный реген AP, утренний сброс, радар.
   useEffect(() => {
@@ -155,8 +211,37 @@ export default function App() {
     });
   }, []);
 
+  const handleSignOut = useCallback(async () => {
+    clearTimeout(syncTimer.current);
+    if (player && user?.id) {
+      try {
+        await syncPlayerToCloud(player);
+      } catch {
+        /* ignore */
+      }
+    }
+    setPlayer(null);
+    await signOut();
+  }, [player, user?.id, syncPlayerToCloud, signOut]);
+
+  if (authLoading || (user && bootstrapping && !player)) {
+    return (
+      <div className="system-bg flex min-h-dvh items-center justify-center">
+        <div className="font-display text-sm tracking-widest text-neon/80">СИНХРОНИЗАЦИЯ…</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
   if (!player) {
-    return <Onboarding onAwaken={(name, gender) => setPlayer(createPlayer(name, gender))} />;
+    return (
+      <div className="system-bg flex min-h-dvh items-center justify-center">
+        <div className="font-display text-sm tracking-widest text-neon/80">ЗАГРУЗКА ПРОФИЛЯ…</div>
+      </div>
+    );
   }
 
   return (
@@ -169,6 +254,7 @@ export default function App() {
             setTitlesSubTab('titles');
             setTab('titles');
           }}
+          onSignOut={handleSignOut}
         />
 
         <main className="flex-1 px-4 pt-4 pb-28">
@@ -176,8 +262,10 @@ export default function App() {
             <StatusScreen
               player={player}
               onReset={() => {
-                localStorage.removeItem(STORAGE_KEY);
-                setPlayer(null);
+                if (!confirm('Сбросить локальный прогресс этого аккаунта?')) return;
+                const fresh = createPlayer(player.name, player.gender || 'male');
+                setPlayer(fresh);
+                syncPlayerToCloud(fresh);
               }}
             />
           )}
@@ -219,11 +307,12 @@ export default function App() {
               onEquip={(id) => commit(equipTitle(player, id))}
             />
           )}
+          {tab === 'rank' && <LeaderboardScreen />}
           {tab === 'analytics' && <AnalyticsScreen player={player} />}
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-neon/20 bg-void/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
-          <div className="mx-auto grid max-w-md grid-cols-6">
+          <div className="mx-auto flex max-w-md gap-0.5 overflow-x-auto px-1">
             {TABS.map(({ id, label, Icon }) => {
               const active = tab === id;
               return (
@@ -233,9 +322,9 @@ export default function App() {
                     if (id === 'titles') setTitlesSubTab('titles');
                     setTab(id);
                   }}
-                  className={`flex flex-col items-center gap-0.5 py-2 text-[9px] font-bold tracking-wider transition ${active ? 'text-neon' : 'text-zinc-500'}`}
+                  className={`flex min-w-[3.25rem] flex-1 flex-col items-center gap-0.5 py-2 text-[8px] font-bold tracking-wider transition ${active ? 'text-neon' : 'text-zinc-500'}`}
                 >
-                  <Icon size={18} style={{ filter: active ? 'drop-shadow(0 0 6px #22d3ee)' : 'none' }} />
+                  <Icon size={16} style={{ filter: active ? 'drop-shadow(0 0 6px #22d3ee)' : 'none' }} />
                   {label}
                 </button>
               );
