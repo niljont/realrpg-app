@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Russo One", system-ui, sans-serif;
+  --font-sans: "Exo 2", system-ui, sans-serif;
+  --color-void: #09090b;
+  --color-neon: #22d3ee;
+  --color-arcane: #a855f7;
+  --color-gold: #eab308;
+  --color-silver: #94a3b8;
+  --color-copper: #b45309;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: #09090b;
+  color: #e4e4e7;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+/* Сетка-фон «системы» */
+.system-bg {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgb(34 211 238 / 0.12), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgb(168 85 247 / 0.1), transparent 70%),
+    linear-gradient(rgb(34 211 238 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(34 211 238 / 0.04) 1px, transparent 1px),
+    #09090b;
+  background-size: auto, auto, 28px 28px, 28px 28px, auto;
+}
+
+/* Панель окна системы с неоновой рамкой */
+.system-panel {
+  position: relative;
+  background: linear-gradient(180deg, rgb(24 24 27 / 0.92), rgb(9 9 11 / 0.95));
+  border: 1px solid rgb(34 211 238 / 0.35);
+  border-radius: 1rem;
+  box-shadow:
+    0 0 0 1px rgb(34 211 238 / 0.05) inset,
+    0 0 24px rgb(34 211 238 / 0.12),
+    0 0 60px rgb(168 85 247 / 0.06);
+}
+
+.system-panel::before,
+.system-panel::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: #22d3ee;
+  pointer-events: none;
+}
+.system-panel::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+  border-top-left-radius: 1rem;
+}
+.system-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+  border-bottom-right-radius: 1rem;
+}
+
+.glow-text {
+  text-shadow: 0 0 8px rgb(34 211 238 / 0.7), 0 0 22px rgb(34 211 238 / 0.35);
+}
+
+.title-badge {
+  --c: #22d3ee;
+  color: var(--c);
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent),
+    inset 0 0 8px color-mix(in srgb, var(--c) 25%, transparent);
+  text-shadow: 0 0 8px var(--c);
+  animation: badge-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  50% {
+    box-shadow: 0 0 20px color-mix(in srgb, var(--c) 70%, transparent),
+      inset 0 0 10px color-mix(in srgb, var(--c) 35%, transparent);
+  }
+}
+
+.plus-btn {
+  box-shadow: 0 0 10px rgb(59 130 246 / 0.7), 0 0 22px rgb(59 130 246 / 0.35);
+  animation: plus-pulse 1.8s ease-in-out infinite;
+}
+@keyframes plus-pulse {
+  50% {
+    box-shadow: 0 0 16px rgb(59 130 246 / 0.95), 0 0 34px rgb(59 130 246 / 0.5);
+  }
+}
+
+.bar-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  transform: translateX(-100%);
+  animation: shine 3s ease-in-out infinite;
+}
+@keyframes shine {
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.modal-in {
+  animation: modal-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+
+.toast-in {
+  animation: toast-in 0.3s ease-out;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+.unlock-card {
+  animation: unlock-card 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+}
+@keyframes unlock-card {
+  from {
+    opacity: 0;
+    transform: scale(0.7) translateY(24px);
+  }
+}
+
+.unlock-flash {
+  animation: unlock-flash 1.6s ease-out;
+}
+@keyframes unlock-flash {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  20% {
+    filter: brightness(1.45);
+  }
+}
+
+.unlock-particle {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--c);
+  box-shadow: 0 0 10px var(--c);
+  animation: unlock-particle 0.9s ease-out forwards;
+}
+@keyframes unlock-particle {
+  to {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-140px) scale(0.2);
+  }
+}
+
+/* Убираем стрелки у числовых полей */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.recharts-wrapper *:focus {
+  outline: none;
+}
