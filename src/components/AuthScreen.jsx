@@ -44,7 +44,7 @@ export default function AuthScreen() {
 
         {!isConfigured && (
           <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-center text-[11px] text-amber-300">
-            Ключи Supabase не найдены. Проверьте `.env.local`.
+            Ключи Supabase не найдены. На Vercel задайте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY, затем Redeploy.
           </div>
         )}
 
