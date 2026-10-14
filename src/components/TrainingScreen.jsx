@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, Dumbbell } from 'lucide-react';
 import {
   EXERCISES,
+  LOAD_DIFFICULTIES,
   STATS,
   STAT_META,
   dayKey,
@@ -13,34 +14,72 @@ import {
 
 function ExerciseRow({ ex, color, mult, onDone }) {
   const [amount, setAmount] = useState('');
-  const pts = Math.round(exercisePoints(ex, Number(amount) || 0) * mult);
+  const [diff, setDiff] = useState('normal');
+  const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === diff) : null;
+  const rate = load?.rate ?? ex.rate;
+  const pts = Math.round(exercisePoints(ex, Number(amount) || 0, rate) * mult * 2) / 2;
+
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2.5">
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold text-zinc-100">{ex.name}</div>
-        <div className="text-[10px] text-zinc-500">
-          1 {ex.unit} = {ex.rate} pt {pts > 0 && <span style={{ color }}>· +{pts} pt</span>}
+    <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-zinc-100">{ex.name}</div>
+          <div className="text-[10px] text-zinc-500">
+            {ex.loadDifficulty ? (
+              <>
+                1 {ex.unit} = {rate} pt ({load?.label})
+              </>
+            ) : (
+              <>
+                1 {ex.unit} = {ex.rate} pt
+              </>
+            )}
+            {pts > 0 && <span style={{ color }}> · +{pts} pt</span>}
+          </div>
         </div>
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step={ex.step ?? 1}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder={ex.unit}
+          className="w-20 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-right font-bold tabular-nums outline-none"
+          style={{ color }}
+        />
+        <button
+          disabled={pts <= 0}
+          onClick={() => onDone(ex.id, Number(amount), ex.loadDifficulty ? rate : undefined) && setAmount('')}
+          className="flex min-w-12 items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs font-bold text-white transition active:scale-95 disabled:opacity-25"
+          style={{ background: color, boxShadow: `0 0 12px ${color}77` }}
+        >
+          <Check size={14} />
+        </button>
       </div>
-      <input
-        type="number"
-        inputMode="decimal"
-        min="0"
-        step={ex.step ?? 1}
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        placeholder={ex.unit}
-        className="w-20 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-right font-bold tabular-nums outline-none"
-        style={{ color }}
-      />
-      <button
-        disabled={pts <= 0}
-        onClick={() => onDone(ex.id, Number(amount)) && setAmount('')}
-        className="flex min-w-12 items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs font-bold text-white transition active:scale-95 disabled:opacity-25"
-        style={{ background: color, boxShadow: `0 0 12px ${color}77` }}
-      >
-        <Check size={14} />
-      </button>
+      {ex.loadDifficulty && (
+        <div className="grid grid-cols-3 gap-1">
+          {LOAD_DIFFICULTIES.map((d) => {
+            const active = diff === d.id;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setDiff(d.id)}
+                className="rounded-lg border px-1 py-1.5 text-[10px] font-bold transition"
+                style={{
+                  borderColor: active ? color : '#3f3f46',
+                  color: active ? color : '#71717a',
+                  background: active ? `${color}22` : 'transparent',
+                }}
+              >
+                {d.label}
+                <span className="mt-0.5 block font-display text-[9px] opacity-80">{d.rate} pt</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -96,7 +135,13 @@ export default function TrainingScreen({ player, onTrain }) {
         </div>
         <div className="space-y-2">
           {EXERCISES[stat].map((ex) => (
-            <ExerciseRow key={`${stat}-${ex.id}`} ex={ex} color={color} mult={mult} onDone={(id, amt) => onTrain(stat, id, amt)} />
+            <ExerciseRow
+              key={`${stat}-${ex.id}`}
+              ex={ex}
+              color={color}
+              mult={mult}
+              onDone={(id, amt, rate) => onTrain(stat, id, amt, rate)}
+            />
           ))}
         </div>
       </section>

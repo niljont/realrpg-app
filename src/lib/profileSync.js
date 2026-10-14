@@ -1,5 +1,9 @@
-import { createPlayer, getStats, levelFromXp, xpForNext } from './game';
+import { createPlayer, getStats, hydratePlayer, levelFromXp, xpForNext } from './game';
 import { supabase } from './supabase';
+
+/** Колонки профиля без тяжёлого save_data (лидерборд / лёгкий refresh). */
+export const PROFILE_PUBLIC_COLS =
+  'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,breach_wins,updated_at';
 
 /** Минимальные очки стата для отображаемого уровня L. */
 export function pointsForStatLevel(level) {
@@ -21,6 +25,17 @@ export function goldToPalium(gold) {
   return Math.round((Number(gold) || 0)) / 1000;
 }
 
+/** Полный сейв для колонки save_data (jsonb). */
+export function playerToSaveData(player) {
+  if (!player) return null;
+  const save = { ...player };
+  // Не раздуваем облако бесконечным логом.
+  if (Array.isArray(save.log) && save.log.length > 200) {
+    save.log = save.log.slice(-200);
+  }
+  return save;
+}
+
 /** Локальный игрок → строка public.profiles */
 export function playerToProfileRow(player, userId) {
   const stats = getStats(player);
@@ -40,6 +55,8 @@ export function playerToProfileRow(player, userId) {
     max_ap: player.maxAp,
     gold: paliumToGold(player.palium),
     total_reps: Math.round(totalRepsFromPlayer(player)),
+    breach_wins: player.world?.breachWins ?? 0,
+    save_data: playerToSaveData(player),
     updated_at: new Date().toISOString(),
   };
 }
@@ -51,7 +68,6 @@ export function applyProfileToPlayer(player, profile) {
   const targetLevel = Math.max(1, profile.level ?? 1);
   const { level: curLevel } = levelFromXp(xp);
   if (curLevel < targetLevel || (profile.current_exp != null && curLevel === targetLevel)) {
-    // Собираем XP до нужного уровня + current_exp
     xp = 0;
     for (let l = 1; l < targetLevel; l++) xp += xpForNext(l);
     xp += Math.max(0, profile.current_exp ?? 0);
@@ -79,30 +95,137 @@ export function createPlayerFromProfile(profile, gender = 'male') {
   return applyProfileToPlayer(base, profile);
 }
 
-export async function fetchProfile(userId) {
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+/** Выбрать локальный / облачный сейв (новее по updatedAt). */
+export function resolvePlayerBootstrap(local, cloud, fallbackName = 'Игрок') {
+  const cloudSave =
+    cloud?.save_data && typeof cloud.save_data === 'object' ? hydratePlayer(cloud.save_data) : null;
+
+  let next;
+  if (local && cloudSave) {
+    const localTs = Number(local.updatedAt) || 0;
+    const cloudTs = Number(cloudSave.updatedAt) || Date.parse(cloud.updated_at || '') || 0;
+    next = cloudTs >= localTs ? cloudSave : local;
+  } else {
+    next =
+      local ||
+      cloudSave ||
+      (cloud ? createPlayerFromProfile(cloud) : createPlayer(fallbackName, 'male'));
+  }
+
+  if (cloud?.username) next = { ...next, name: cloud.username };
+  return next;
+}
+
+export async function fetchProfile(userId, { withSave = false } = {}) {
+  const cols = withSave ? `${PROFILE_PUBLIC_COLS},save_data` : PROFILE_PUBLIC_COLS;
+  let { data, error } = await supabase.from('profiles').select(cols).eq('id', userId).maybeSingle();
+
+  // Старая схема без save_data / breach_wins — откатываемся к select *.
+  if (error && /save_data|breach_wins|column/i.test(error.message || '')) {
+    ({ data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle());
+  }
   if (error) throw error;
   return data;
+}
+
+async function upsertRow(row) {
+  let current = { ...row };
+  let selectCols = PROFILE_PUBLIC_COLS;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(current, { onConflict: 'id' })
+      .select(selectCols)
+      .maybeSingle();
+
+    if (!error) return data;
+
+    const msg = error.message || '';
+    if (/save_data/i.test(msg) && 'save_data' in current) {
+      const { save_data: _sd, ...rest } = current;
+      current = rest;
+      console.warn(
+        '[СИСТЕМА] Колонка save_data отсутствует. Выполни SQL: alter table public.profiles add column if not exists save_data jsonb;',
+      );
+      continue;
+    }
+    if (/breach_wins/i.test(msg)) {
+      if ('breach_wins' in current) {
+        const { breach_wins: _bw, ...rest } = current;
+        current = rest;
+      }
+      selectCols = selectCols
+        .split(',')
+        .filter((c) => c.trim() !== 'breach_wins')
+        .join(',');
+      continue;
+    }
+    if (/column|does not exist|schema cache/i.test(msg)) {
+      const { data: d2, error: e2 } = await supabase
+        .from('profiles')
+        .upsert(current, { onConflict: 'id' })
+        .select('*')
+        .maybeSingle();
+      if (e2) throw e2;
+      return d2;
+    }
+    throw error;
+  }
+  throw new Error('Не удалось сохранить профиль');
 }
 
 export async function upsertProfile(player, userId) {
   const row = playerToProfileRow(player, userId);
-  const { data, error } = await supabase.from('profiles').upsert(row, { onConflict: 'id' }).select().maybeSingle();
-  if (error) throw error;
-  return data;
+  return upsertRow(row);
 }
 
-export async function fetchLeaderboard(limit = 50) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(
-      'id, username, level, current_exp, strength, endurance, agility, intelligence, willpower, current_ap, max_ap, gold, total_reps, updated_at',
-    )
-    .order('level', { ascending: false })
-    .order('current_exp', { ascending: false })
-    .limit(limit);
+export async function fetchLeaderboard(limit = 100) {
+  let { data, error } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLS).limit(limit);
+  if (error && /breach_wins|column/i.test(error.message || '')) {
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select(
+        'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,updated_at',
+      )
+      .limit(limit));
+  }
   if (error) throw error;
   return data ?? [];
+}
+
+export function powerScore(row) {
+  return (row.strength ?? 0) + (row.endurance ?? 0) + (row.agility ?? 0) + (row.intelligence ?? 0) + (row.willpower ?? 0);
+}
+
+export function sortLeaderboard(rows, mode) {
+  const list = [...(rows ?? [])];
+  const by = (fn) =>
+    list.sort(
+      (a, b) =>
+        fn(b) - fn(a) || (b.level ?? 0) - (a.level ?? 0) || String(a.username).localeCompare(String(b.username)),
+    );
+  switch (mode) {
+    case 'STR':
+      return by((r) => r.strength ?? 0);
+    case 'END':
+      return by((r) => r.endurance ?? 0);
+    case 'AGI':
+      return by((r) => r.agility ?? 0);
+    case 'INT':
+      return by((r) => r.intelligence ?? 0);
+    case 'WIL':
+      return by((r) => r.willpower ?? 0);
+    case 'level':
+      return by((r) => (r.level ?? 0) * 100000 + (r.current_exp ?? 0));
+    case 'breaches':
+      return by((r) => r.breach_wins ?? 0);
+    case 'rich':
+      return by((r) => r.gold ?? 0);
+    case 'overall':
+    default:
+      return by((r) => powerScore(r));
+  }
 }
 
 export function storageKeyForUser(userId) {

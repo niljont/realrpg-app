@@ -12,11 +12,20 @@ export const STAT_META = {
 
 // rate — сколько поинтов даёт одна единица (повтор / секунда / км / минута).
 // apCost — переопределяет стоимость записи в дневном трекере.
+/** Сложность для гири/гантелей: поинты за 1 повтор. */
+export const LOAD_DIFFICULTIES = [
+  { id: 'easy', label: 'Легко', rate: 0.5 },
+  { id: 'normal', label: 'Нормально', rate: 1 },
+  { id: 'hard', label: 'Сложно', rate: 1.5 },
+];
+
 export const EXERCISES = {
   STR: [
     { id: 'pushups', name: 'Отжимания', unit: 'повт.', rate: 1 },
     { id: 'pullups', name: 'Подтягивания', unit: 'повт.', rate: 3 },
-    { id: 'kettlebell', name: 'Гиря', unit: 'повт.', rate: 1.5 },
+    { id: 'legsquats', name: 'Приседания', unit: 'повт.', rate: 1 },
+    { id: 'kettlebell', name: 'Гиря', unit: 'повт.', rate: 1, loadDifficulty: true },
+    { id: 'dumbbells', name: 'Гантели', unit: 'повт.', rate: 1, loadDifficulty: true },
   ],
   END: [
     { id: 'abs', name: 'Пресс', unit: 'повт.', rate: 1 },
@@ -32,6 +41,7 @@ export const EXERCISES = {
     { id: 'reading', name: 'Чтение', unit: 'мин', rate: 1 },
     { id: 'study', name: 'Учёба', unit: 'мин', rate: 1.5 },
     { id: 'languages', name: 'Языки', unit: 'мин', rate: 1.5 },
+    { id: 'chess', name: 'Партия шахмат', unit: 'парт.', rate: 25 },
   ],
   WIL: [
     { id: 'meditation', name: 'Медитация', unit: 'мин', rate: 2 },
@@ -65,6 +75,8 @@ export const TITLES = {
     req: 'Открыт сразу',
     effect: { hp: 5 },
     achievement: null,
+    track: null,
+    tier: 0,
   },
   iron: {
     names: { male: 'Железный Кузнец', female: 'Железная Дева' },
@@ -73,6 +85,18 @@ export const TITLES = {
     req: 'За 1000 отжиманий',
     effect: { xp: { STR: 0.03 } },
     achievement: 'pushups1000',
+    track: 'pushups',
+    tier: 1,
+  },
+  iron_ii: {
+    names: { male: 'Титан Железа', female: 'Титанида Железа' },
+    color: '#f43f5e',
+    bonus: '+6% к XP Силы',
+    req: 'За 5000 отжиманий',
+    effect: { xp: { STR: 0.06 } },
+    achievement: 'pushups5000',
+    track: 'pushups',
+    tier: 2,
   },
   rockbreaker: {
     names: { male: 'Сокрушитель Скал', female: 'Сокрушительница Скал' },
@@ -81,6 +105,18 @@ export const TITLES = {
     req: 'За 300 подтягиваний',
     effect: { strPerAp: 18 },
     achievement: 'pullups300',
+    track: 'pullups',
+    tier: 1,
+  },
+  rockbreaker_ii: {
+    names: { male: 'Лорд Турника', female: 'Леди Турника' },
+    color: '#fb923c',
+    bonus: 'Курс AP: 15 поинтов вместо 20',
+    req: 'За 1500 подтягиваний',
+    effect: { strPerAp: 15 },
+    achievement: 'pullups1500',
+    track: 'pullups',
+    tier: 2,
   },
   runner: {
     names: { male: 'Неутомимый Бегун', female: 'Неутомимая Бегунья' },
@@ -89,6 +125,18 @@ export const TITLES = {
     req: 'За 100 км бега',
     effect: { xp: { END: 0.05 } },
     achievement: 'run100',
+    track: 'run',
+    tier: 1,
+  },
+  runner_ii: {
+    names: { male: 'Марафонец Пустоши', female: 'Марафонка Пустоши' },
+    color: '#4ade80',
+    bonus: '+10% к XP Выносливости',
+    req: 'За 500 км бега',
+    effect: { xp: { END: 0.1 } },
+    achievement: 'run500',
+    track: 'run',
+    tier: 2,
   },
   chef: {
     names: { male: 'Шеф-Повар Пустошей', female: 'Шеф-Повар Пустошей' },
@@ -97,6 +145,8 @@ export const TITLES = {
     req: 'За 30 полезных блюд',
     effect: { satietyHours: 5 },
     achievement: 'meals30',
+    track: 'meals',
+    tier: 1,
   },
   keeper: {
     names: { male: 'Хранитель Знаний', female: 'Хранительница Знаний' },
@@ -105,24 +155,46 @@ export const TITLES = {
     req: 'За 1000 мин языков',
     effect: { inkDiscount: 2 },
     achievement: 'languages1000',
+    track: 'languages',
+    tier: 1,
+  },
+  tactician: {
+    names: { male: 'Тактик', female: 'Тактик' },
+    color: '#60a5fa',
+    bonus: '+4% к XP Интеллекта',
+    req: 'За 50 партий',
+    effect: { xp: { INT: 0.04 } },
+    achievement: 'chess50',
+    track: 'chess',
+    tier: 1,
   },
 };
 
-// exId — прогресс считается по накопительному счётчику упражнения; иначе через progress(p).
+// exId — прогресс по totals; track+tier — уровни одной ветки достижений/титулов.
 export const ACHIEVEMENTS = [
-  { id: 'pushups1000', name: 'Тысяча отжиманий', exId: 'pushups', goal: 1000, title: 'iron', color: '#ef4444' },
-  { id: 'pullups300', name: 'Покоритель турника', exId: 'pullups', goal: 300, title: 'rockbreaker', color: '#f97316' },
-  { id: 'run100', name: 'Сотня километров', exId: 'run', goal: 100, title: 'runner', color: '#22c55e' },
-  { id: 'meals30', name: 'Кулинар Системы', exId: 'meals', goal: 30, title: 'chef', color: '#eab308' },
-  { id: 'languages1000', name: 'Полиглот', exId: 'languages', goal: 1000, title: 'keeper', color: '#3b82f6' },
-  { id: 'firstQuest', name: 'Первый шаг', desc: 'Выполнить первую тренировку', progress: (p) => p.log.length, goal: 1, color: '#22d3ee' },
-  { id: 'level10', name: 'Пробуждённый', desc: 'Достичь 10 уровня', progress: (p) => levelFromXp(p.xp).level, goal: 10, color: '#a855f7' },
-  { id: 'maxAp15', name: 'Бездонный резерв', desc: 'Поднять максимум энергии до 15 AP', progress: (p) => p.maxAp, goal: 15, color: '#3b82f6' },
+  { id: 'pushups1000', name: 'Тысяча отжиманий', exId: 'pushups', goal: 1000, title: 'iron', color: '#ef4444', track: 'pushups', tier: 1 },
+  { id: 'pushups5000', name: 'Пять тысяч отжиманий', exId: 'pushups', goal: 5000, title: 'iron_ii', color: '#f43f5e', track: 'pushups', tier: 2 },
+  { id: 'pullups300', name: 'Покоритель турника', exId: 'pullups', goal: 300, title: 'rockbreaker', color: '#f97316', track: 'pullups', tier: 1 },
+  { id: 'pullups1500', name: 'Властелин перекладины', exId: 'pullups', goal: 1500, title: 'rockbreaker_ii', color: '#fb923c', track: 'pullups', tier: 2 },
+  { id: 'run100', name: 'Сотня километров', exId: 'run', goal: 100, title: 'runner', color: '#22c55e', track: 'run', tier: 1 },
+  { id: 'run500', name: 'Пятьсот километров', exId: 'run', goal: 500, title: 'runner_ii', color: '#4ade80', track: 'run', tier: 2 },
+  { id: 'meals30', name: 'Кулинар Системы', exId: 'meals', goal: 30, title: 'chef', color: '#eab308', track: 'meals', tier: 1 },
+  { id: 'languages1000', name: 'Полиглот', exId: 'languages', goal: 1000, title: 'keeper', color: '#3b82f6', track: 'languages', tier: 1 },
+  { id: 'chess50', name: 'Пятьдесят партий', exId: 'chess', goal: 50, title: 'tactician', color: '#60a5fa', track: 'chess', tier: 1 },
+  { id: 'firstQuest', name: 'Первый шаг', desc: 'Выполнить первую тренировку', progress: (p) => p.log.length, goal: 1, color: '#22d3ee', tier: 1 },
+  { id: 'level10', name: 'Пробуждённый', desc: 'Достичь 10 уровня', progress: (p) => levelFromXp(p.xp).level, goal: 10, color: '#a855f7', tier: 1 },
+  { id: 'maxAp15', name: 'Бездонный резерв', desc: 'Поднять максимум энергии до 15 AP', progress: (p) => p.maxAp, goal: 15, color: '#3b82f6', tier: 1 },
 ];
 
 export const titleName = (id, gender) => TITLES[id]?.names[gender] ?? '—';
 
-export const achievementProgress = (p, a) => Math.min(a.goal, a.exId ? (p.totals[a.exId] ?? 0) : a.progress(p));
+export const achievementProgress = (p, a) => {
+  const raw = a.exId ? (p.totals[a.exId] ?? 0) : a.progress(p);
+  return Math.min(a.goal, raw);
+};
+
+/** Сырой прогресс трека (для отображения уровней). */
+export const achievementRawProgress = (p, a) => (a.exId ? (p.totals[a.exId] ?? 0) : a.progress(p));
 
 export const isTitleUnlocked = (p, id) => {
   const ach = TITLES[id]?.achievement;
@@ -141,6 +213,67 @@ export function achievementTrackLabel(a) {
   }
   return a.name;
 }
+
+/** Максимальный открытый уровень ветки достижений. */
+export function achievementTrackTier(p, track) {
+  if (!track) return 0;
+  return ACHIEVEMENTS.filter((a) => a.track === track && p.achievements.includes(a.id)).reduce(
+    (max, a) => Math.max(max, a.tier ?? 1),
+    0,
+  );
+}
+
+/** Мс до следующего +1 AP (0 если на капе или тик уже должен сработать). */
+export function msUntilNextAp(p, now = Date.now()) {
+  if (!p || p.ap >= p.maxAp) return 0;
+  const last = p.lastApTick ?? now;
+  const elapsed = Math.max(0, now - last);
+  const mod = elapsed % AP_REGEN_MS;
+  if (mod === 0 && elapsed > 0) return 0;
+  return AP_REGEN_MS - mod;
+}
+
+export function formatDuration(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h > 0) return `${h}ч ${String(m).padStart(2, '0')}м`;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+export const BUFF_INFO = {
+  metabolism: {
+    id: 'metabolism',
+    label: 'Оптимизация метаболизма',
+    desc: '+15% к урону и получаемому XP. Действует 8 часов после здоровой домашней еды.',
+    color: '#f97316',
+    untilKey: 'metabolismUntil',
+    altUntilKey: 'anabolicUntil',
+  },
+  satiety: {
+    id: 'satiety',
+    label: 'Сытость',
+    desc: 'Небольшой бонус к XP после обычной сытости. Длительность зависит от титула.',
+    color: '#fbbf24',
+    untilKey: 'satietyUntil',
+  },
+  focus: {
+    id: 'focus',
+    label: 'Эликсир Фокуса',
+    desc: '+10% к XP и бонус к набору навыка Начертания.',
+    color: '#3b82f6',
+    untilKey: 'focusUntil',
+  },
+  clog: {
+    id: 'clog',
+    label: 'Зашлакованность ядра',
+    desc: '−10% к статам в бою на 6 часов. Снимается здоровой едой или Свитком Читмила при срыве.',
+    color: '#ef4444',
+    untilKey: 'clogUntil',
+    altUntilKey: 'foodComaUntil',
+  },
+};
 
 /* ---------- эффекты активного титула и баффов ---------- */
 
@@ -180,7 +313,12 @@ export function damageMultiplier(p, now = Date.now()) {
 
 /* ---------- формулы ---------- */
 
-export const exercisePoints = (ex, amount) => Math.max(0, Math.round(ex.rate * amount));
+export const exercisePoints = (ex, amount, rateOverride) => {
+  const rate = rateOverride != null ? Number(rateOverride) : ex.rate;
+  const raw = Math.max(0, (Number(amount) || 0) * rate);
+  // Сохраняем половинки (0.5 / 1.5) до финального округления в applyTraining.
+  return Math.round(raw * 100) / 100;
+};
 
 export const findExercise = (stat, id) => EXERCISES[stat]?.find((e) => e.id === id);
 
@@ -293,6 +431,7 @@ export function createPlayer(name, gender) {
     world: { gathered: 0, cooked: 0, breaches: 0, breachWins: 0 },
     log: [],
     energy: { strPoints: 0, endPoints: 0, apRestored: 0, maxApGained: 0 },
+    updatedAt: now,
   };
 }
 
@@ -310,8 +449,9 @@ export function sealResult(result) {
   return { player: checkAchievements(result.player, events), events };
 }
 
-// Приводит сохранения v1/v2 к текущей схеме.
-function normalize(p) {
+// Приводит сохранения v1/v2 / облачный JSON к текущей схеме.
+export function hydratePlayer(p) {
+  if (!p || typeof p !== 'object') return null;
   const totals = p.totals ?? (p.log ?? []).reduce((t, e) => ({ ...t, [e.exId]: (t[e.exId] ?? 0) + e.amount }), {});
   const { unlockedTitles: _legacy, copper: legacyCopper, ...rest } = p;
   const next = {
@@ -330,7 +470,7 @@ function normalize(p) {
     radar: p.radar ?? null,
     breach: p.breach?.active ? p.breach : null,
     world: { gathered: 0, cooked: 0, breaches: 0, breachWins: 0, ...(p.world ?? {}) },
-    log: p.log ?? [],
+    log: Array.isArray(p.log) ? p.log.slice(-200) : [],
     palium: migratePalium(p.palium ?? legacyCopper ?? 0, p.version ?? 0),
     energy: {
       strPoints: 0,
@@ -340,6 +480,7 @@ function normalize(p) {
       ...(p.energy ?? {}),
     },
     totals,
+    updatedAt: Number(p.updatedAt) || 0,
     version: 7,
   };
   delete next.copper;
@@ -351,10 +492,16 @@ function normalize(p) {
 export function loadPlayer(storageKey = STORAGE_KEY) {
   try {
     const raw = localStorage.getItem(storageKey);
-    return raw ? normalize(JSON.parse(raw)) : null;
+    return raw ? hydratePlayer(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
+}
+
+/** Метка времени перед записью в localStorage / Supabase. */
+export function stampPlayer(p, now = Date.now()) {
+  if (!p) return p;
+  return { ...p, updatedAt: now };
 }
 
 /** Утренний сброс AP + пассивный реген +1 / 30 мин по timestamp. */
@@ -425,15 +572,16 @@ export function equipTitle(p, id) {
   };
 }
 
-/** Прокачка: упражнения без траты AP → XP и статы (без Палиума). */
-export function applyTraining(p, stat, exId, amount) {
+/** Прокачка: упражнения без траты AP → XP и статы (без Палиума). rateOverride — для гири/гантелей. */
+export function applyTraining(p, stat, exId, amount, rateOverride) {
   const ex = findExercise(stat, exId);
   if (!ex) return { error: 'Неизвестное упражнение' };
-  const base = exercisePoints(ex, amount);
+  if (ex.loadDifficulty && rateOverride == null) return { error: 'Выберите сложность' };
+  const base = exercisePoints(ex, amount, rateOverride);
   if (base <= 0) return { error: 'Введите количество' };
 
   const now = Date.now();
-  const points = Math.round(base * xpMultiplier(p, stat, now));
+  const points = Math.round(base * xpMultiplier(p, stat, now) * 2) / 2; // шаг 0.5
   const events = [];
   const prevLevel = levelFromXp(p.xp).level;
   const prevStat = statLevel(p.statPoints[stat]);
@@ -443,12 +591,12 @@ export function applyTraining(p, stat, exId, amount) {
     xp: p.xp + points,
     statPoints: { ...p.statPoints, [stat]: p.statPoints[stat] + points },
     totals: addTotals(p.totals, stat, { [exId]: amount }),
-    log: [...(p.log ?? []), { ts: now, date: dayKey(now), stat, exId, amount, points }],
+    log: [...(p.log ?? []), { ts: now, date: dayKey(now), stat, exId, amount, points, rate: rateOverride ?? ex.rate }],
   };
 
   events.push({
     type: 'gain',
-    text: `+${points} ${stat} · +${points} XP${points > base ? ` (бонус +${points - base})` : ''}`,
+    text: `+${points} ${stat} · +${points} XP${points > base ? ` (бонус +${Math.round((points - base) * 2) / 2})` : ''}`,
   });
 
   const newStat = statLevel(next.statPoints[stat]);

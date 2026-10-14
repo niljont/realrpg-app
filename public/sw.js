@@ -1,4 +1,4 @@
-const CACHE = 'system-rpg-v1';
+const CACHE = 'system-rpg-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg'];
 
 self.addEventListener('install', (event) => {
@@ -17,21 +17,34 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
-  // Навигация: сначала сеть, при оффлайне — закешированная оболочка.
-  if (request.mode === 'navigate') {
+  const url = new URL(request.url);
+
+  // Навигация и бандлы Vite: сеть важнее кэша, иначе телефон залипает на старом коде.
+  const isNavigate = request.mode === 'navigate';
+  const isAppAsset =
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith('/assets/') ||
+      request.destination === 'script' ||
+      request.destination === 'style' ||
+      request.destination === 'worker');
+
+  if (isNavigate || isAppAsset) {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          if (res.ok) {
+            const copy = res.clone();
+            const key = isNavigate ? '/index.html' : request;
+            caches.open(CACHE).then((c) => c.put(key, copy));
+          }
           return res;
         })
-        .catch(() => caches.match('/index.html')),
+        .catch(() => caches.match(isNavigate ? '/index.html' : request)),
     );
     return;
   }
 
-  // Статика (включая шрифты Google): cache-first с дозаписью.
+  // Остальная статика (иконки и т.п.): cache-first.
   event.respondWith(
     caches.match(request).then(
       (cached) =>

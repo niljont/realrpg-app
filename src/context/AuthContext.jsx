@@ -89,7 +89,14 @@ export function AuthProvider({ children }) {
       return { error };
     }
     try {
-      await refreshProfile(data.user.id);
+      const row = await refreshProfile(data.user.id);
+      // Подтягиваем Display name в Auth из profiles.username (для старых аккаунтов).
+      const nick = row?.username;
+      if (nick && !data.user.user_metadata?.display_name) {
+        await supabase.auth.updateUser({
+          data: { username: nick, display_name: nick, full_name: nick },
+        });
+      }
     } catch {
       /* ignore */
     }
@@ -111,6 +118,8 @@ export function AuthProvider({ children }) {
       options: {
         data: {
           username: nick,
+          display_name: nick,
+          full_name: nick,
         },
       },
     });
@@ -155,12 +164,14 @@ export function AuthProvider({ children }) {
 
   const syncPlayerToCloud = useCallback(
     async (player) => {
-      if (!user?.id || !player) return;
+      if (!user?.id || !player) return { ok: false, error: 'Нет сессии' };
       try {
         const row = await upsertProfile(player, user.id);
         setProfile(row);
+        return { ok: true, row };
       } catch (e) {
         console.warn('[СИСТЕМА] Синхронизация профиля не удалась', e);
+        return { ok: false, error: e?.message || 'Синхронизация не удалась' };
       }
     },
     [user?.id],

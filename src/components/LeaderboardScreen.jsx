@@ -1,11 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Medal, RefreshCw, Trophy } from 'lucide-react';
-import { fetchLeaderboard } from '../lib/profileSync';
+import { fetchLeaderboard, powerScore, sortLeaderboard } from '../lib/profileSync';
+import { STAT_META, formatPalium, stampPlayer } from '../lib/game';
 import { useAuth } from '../context/AuthContext';
-
-function powerScore(row) {
-  return (row.strength ?? 0) + (row.endurance ?? 0) + (row.agility ?? 0) + (row.intelligence ?? 0) + (row.willpower ?? 0);
-}
 
 function rankColor(i) {
   if (i === 0) return '#eab308';
@@ -14,56 +11,179 @@ function rankColor(i) {
   return '#22d3ee';
 }
 
-export default function LeaderboardScreen() {
-  const { user } = useAuth();
+const TABS = [
+  { id: 'overall', label: 'Общий' },
+  { id: 'level', label: 'Уровень' },
+  { id: 'STR', label: 'STR' },
+  { id: 'END', label: 'END' },
+  { id: 'AGI', label: 'AGI' },
+  { id: 'INT', label: 'INT' },
+  { id: 'WIL', label: 'WIL' },
+  { id: 'breaches', label: 'Бреши' },
+  { id: 'rich', label: 'Богачи' },
+];
+
+function scoreLabel(mode, row) {
+  switch (mode) {
+    case 'STR':
+      return `STR ${row.strength ?? 0}`;
+    case 'END':
+      return `END ${row.endurance ?? 0}`;
+    case 'AGI':
+      return `AGI ${row.agility ?? 0}`;
+    case 'INT':
+      return `INT ${row.intelligence ?? 0}`;
+    case 'WIL':
+      return `WIL ${row.willpower ?? 0}`;
+    case 'level':
+      return `Lv ${row.level ?? 1}`;
+    case 'breaches':
+      return `${row.breach_wins ?? 0} побед`;
+    case 'rich':
+      return `${formatPalium((row.gold ?? 0) / 1000)} P`;
+    case 'overall':
+    default:
+      return `Σ ${powerScore(row)} · Lv ${row.level ?? 1}`;
+  }
+}
+
+function formatUpdatedAt(ts) {
+  if (!ts) return '';
+  try {
+    return new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+export default function LeaderboardScreen({ player }) {
+  const { user, syncPlayerToCloud } = useAuth();
   const [rows, setRows] = useState([]);
+  const [tab, setTab] = useState('overall');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [hint, setHint] = useState('');
+  const [fetchedAt, setFetchedAt] = useState(null);
+  const reqId = useRef(0);
+  const playerRef = useRef(player);
+  playerRef.current = player;
 
-  const load = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await fetchLeaderboard(50);
-      setRows(data);
-    } catch (e) {
-      setError(e?.message || 'Не удалось загрузить рейтинг');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const load = useCallback(
+    async ({ pushFirst = true } = {}) => {
+      const id = ++reqId.current;
+      setLoading(true);
+      setError('');
+      setHint('');
+      try {
+        const p = playerRef.current;
+        if (pushFirst && p && user?.id) {
+          const sync = await syncPlayerToCloud(stampPlayer(p));
+          if (!sync?.ok && sync?.error) {
+            setHint(`Синк: ${sync.error}`);
+          }
+        }
+
+        const data = await fetchLeaderboard(100);
+        if (id !== reqId.current) return;
+        setRows(data);
+        setFetchedAt(Date.now());
+
+        if (data.length <= 1) {
+          setHint(
+            (h) =>
+              h ||
+              'Виден только 1 игрок — в Supabase нужна политика SELECT на profiles для authenticated (см. supabase/leaderboard_rls.sql).',
+          );
+        }
+      } catch (e) {
+        if (id !== reqId.current) return;
+        setError(e?.message || 'Не удалось загрузить рейтинг');
+      } finally {
+        if (id === reqId.current) setLoading(false);
+      }
+    },
+    [user?.id, syncPlayerToCloud],
+  );
 
   useEffect(() => {
-    load();
-  }, []);
+    load({ pushFirst: true });
+  }, [load]);
+
+  const sorted = useMemo(() => sortLeaderboard(rows, tab).slice(0, 50), [rows, tab]);
+  const accent = STAT_META[tab]?.color || (tab === 'rich' ? '#38bdf8' : tab === 'breaches' ? '#a855f7' : '#eab308');
 
   return (
     <div className="space-y-4">
       <section className="system-panel space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Trophy size={16} className="text-amber-400" />
-            <h2 className="font-display text-sm tracking-widest text-amber-300/90">РЕЙТИНГ СИСТЕМЫ</h2>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Trophy size={16} className="shrink-0 text-amber-400" />
+              <h2 className="font-display text-sm tracking-widest text-amber-300/90">РЕЙТИНГ СИСТЕМЫ</h2>
+            </div>
+            {fetchedAt && (
+              <p className="mt-1 text-[10px] text-zinc-600">Обновлено в {formatUpdatedAt(fetchedAt)} · игроков: {rows.length}</p>
+            )}
           </div>
           <button
             type="button"
-            onClick={load}
-            className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-400 hover:text-neon"
+            disabled={loading}
+            onClick={() => load({ pushFirst: true })}
+            className="inline-flex min-h-11 min-w-[5.5rem] touch-manipulation items-center justify-center gap-1.5 rounded-xl border border-zinc-600 bg-zinc-900/80 px-3 py-2 text-[11px] font-bold text-zinc-200 active:scale-95 disabled:opacity-50"
           >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Обновить
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Ждите…' : 'Обновить'}
           </button>
         </div>
-        <p className="text-[11px] text-zinc-500">Сортировка по уровню. Подсвечен ваш профиль.</p>
 
-        {error && <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-center text-[11px] text-red-300">{error}</div>}
+        <div className="flex gap-1 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
+          {TABS.map((t) => {
+            const active = tab === t.id;
+            const c = STAT_META[t.id]?.color || '#22d3ee';
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className="min-h-10 shrink-0 touch-manipulation rounded-lg border px-3 py-2 text-[10px] font-bold transition active:scale-95"
+                style={{
+                  borderColor: active ? c : '#27272a',
+                  color: active ? c : '#71717a',
+                  background: active ? `${c}18` : 'transparent',
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="text-[11px] text-zinc-500">
+          {tab === 'overall' && 'Сумма характеристик. Данные с сервера после синка (~1–2 с после действий).'}
+          {tab === 'level' && 'Максимальный уровень игрока.'}
+          {['STR', 'END', 'AGI', 'INT', 'WIL'].includes(tab) && `Топ по ${STAT_META[tab].label}.`}
+          {tab === 'breaches' && 'Топ по числу закрытых Брешей.'}
+          {tab === 'rich' && 'Самые богатые по Палиуму.'}
+        </p>
+
+        {error && (
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-center text-[11px] text-red-300">
+            {error}
+          </div>
+        )}
+        {hint && !error && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-[11px] text-amber-200/90">
+            {hint}
+          </div>
+        )}
 
         {loading && !rows.length ? (
           <div className="py-10 text-center text-xs text-zinc-600">Загрузка таблицы лидеров…</div>
-        ) : rows.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="py-10 text-center text-xs text-zinc-600">Пока нет игроков в рейтинге</div>
         ) : (
           <div className="space-y-2">
-            {rows.map((row, i) => {
+            {sorted.map((row, i) => {
               const mine = user?.id === row.id;
               const color = rankColor(i);
               return (
@@ -86,12 +206,14 @@ export default function LeaderboardScreen() {
                         {mine && <span className="ml-1.5 text-[10px] font-bold text-neon">ВЫ</span>}
                       </div>
                       <div className="mt-0.5 text-[10px] text-zinc-500">
-                        STR {row.strength} · END {row.endurance} · AGI {row.agility} · INT {row.intelligence} · WIL {row.willpower}
+                        STR {row.strength} · END {row.endurance} · AGI {row.agility} · INT {row.intelligence} · WIL{' '}
+                        {row.willpower}
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="font-display text-sm text-neon">Lv {row.level}</div>
-                      <div className="text-[9px] text-zinc-500">Σ {powerScore(row)}</div>
+                      <div className="font-display text-sm" style={{ color: accent }}>
+                        {scoreLabel(tab, row)}
+                      </div>
                     </div>
                   </div>
                 </div>

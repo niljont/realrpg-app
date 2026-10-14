@@ -20,16 +20,19 @@ import {
   loadPlayer,
   savePlayer,
   sealResult,
+  stampPlayer,
 } from './lib/game';
 import {
-  createPlayerFromProfile,
   fetchProfile,
+  resolvePlayerBootstrap,
 } from './lib/profileSync';
 import {
   addCustomRecipe,
+  archiveCustomRecipe,
   buyFromGoblin,
   cookCustomRecipe,
   craftCheatmealScroll,
+  editCustomRecipe,
   eatDish,
   gatherNode,
   logFastFood,
@@ -142,23 +145,27 @@ export default function App() {
 
     (async () => {
       try {
-        let local = loadPlayer(storageKey);
+        const local = loadPlayer(storageKey);
         let cloud = null;
         try {
-          cloud = await fetchProfile(user.id);
+          cloud = await fetchProfile(user.id, { withSave: true });
         } catch {
           cloud = null;
         }
 
-        if (!local) {
-          local = cloud
-            ? createPlayerFromProfile(cloud)
-            : createPlayer(cloud?.username || user.user_metadata?.username || 'Игрок', 'male');
-        } else if (cloud?.username && local.name !== cloud.username) {
-          local = { ...local, name: cloud.username };
-        }
+        const next = resolvePlayerBootstrap(
+          local,
+          cloud,
+          user.user_metadata?.username || user.user_metadata?.display_name || 'Игрок',
+        );
 
-        if (!cancelled) setPlayer(local);
+        if (!cancelled) {
+          setPlayer(next);
+          // Если облако пустое, а локальный сейв есть — сразу залить полный прогресс.
+          if (local && !cloud?.save_data) {
+            syncPlayerToCloud(stampPlayer(next));
+          }
+        }
       } finally {
         if (!cancelled) setBootstrapping(false);
       }
@@ -167,17 +174,35 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user?.id, storageKey]);
+  }, [authLoading, user?.id, storageKey, syncPlayerToCloud]);
 
-  // Локальное сохранение + debounce-синк в Supabase.
+  // Локальное сохранение + debounce-синк полного сейва в Supabase.
   useEffect(() => {
     if (!player || !storageKey || !user?.id) return undefined;
-    savePlayer(player, storageKey);
+    const stamped = stampPlayer(player);
+    savePlayer(stamped, storageKey);
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      syncPlayerToCloud(player);
-    }, 400);
-    return () => clearTimeout(syncTimer.current);
+      syncPlayerToCloud(stamped);
+    }, 1500);
+
+    const flush = () => {
+      clearTimeout(syncTimer.current);
+      const latest = stampPlayer(player);
+      savePlayer(latest, storageKey);
+      syncPlayerToCloud(latest);
+    };
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
+
+    return () => {
+      clearTimeout(syncTimer.current);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
+    };
   }, [player, storageKey, user?.id, syncPlayerToCloud]);
 
   // Пассивный реген AP, утренний сброс, радар.
@@ -215,7 +240,7 @@ export default function App() {
     clearTimeout(syncTimer.current);
     if (player && user?.id) {
       try {
-        await syncPlayerToCloud(player);
+        await syncPlayerToCloud(stampPlayer(player));
       } catch {
         /* ignore */
       }
@@ -267,9 +292,18 @@ export default function App() {
                 setPlayer(fresh);
                 syncPlayerToCloud(fresh);
               }}
+              onEat={(id) => run(eatDish, id)}
+              onUseItem={(id) => run(useInventoryItem, id)}
+              onHealthyMeal={() => run(logHealthyMeal)}
+              onNormalMeal={() => run(logNormalMeal)}
+              onFastFood={() => run(logFastFood)}
+              onSell={(id, amt) => run(sellToGoblin, id, amt)}
+              onBuy={(id) => run(buyFromGoblin, id)}
             />
           )}
-          {tab === 'training' && <TrainingScreen player={player} onTrain={(s, id, amt) => commit(applyTraining(player, s, id, amt))} />}
+          {tab === 'training' && (
+            <TrainingScreen player={player} onTrain={(s, id, amt, rate) => commit(applyTraining(player, s, id, amt, rate))} />
+          )}
           {tab === 'world' && (
             <WorldScreen
               player={player}
@@ -287,15 +321,10 @@ export default function App() {
               player={player}
               onCook={(id) => run(cookCustomRecipe, id)}
               onAddRecipe={(data) => run(addCustomRecipe, data)}
+              onEditRecipe={(id, data) => run(editCustomRecipe, id, data)}
+              onArchiveRecipe={(id, archived) => run(archiveCustomRecipe, id, archived)}
               onStudy={(mins) => run(studyLanguage, mins)}
               onCraftScroll={() => run(craftCheatmealScroll)}
-              onEat={(id) => run(eatDish, id)}
-              onUseItem={(id) => run(useInventoryItem, id)}
-              onHealthyMeal={() => run(logHealthyMeal)}
-              onNormalMeal={() => run(logNormalMeal)}
-              onFastFood={() => run(logFastFood)}
-              onSell={(id, amt) => run(sellToGoblin, id, amt)}
-              onBuy={(id) => run(buyFromGoblin, id)}
             />
           )}
           {tab === 'titles' && (
@@ -307,7 +336,7 @@ export default function App() {
               onEquip={(id) => commit(equipTitle(player, id))}
             />
           )}
-          {tab === 'rank' && <LeaderboardScreen />}
+          {tab === 'rank' && <LeaderboardScreen player={player} />}
           {tab === 'analytics' && <AnalyticsScreen player={player} />}
         </main>
 

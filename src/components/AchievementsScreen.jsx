@@ -52,8 +52,18 @@ function TitlesTab({ player, onEquip }) {
                 {owned ? <Crown size={18} /> : <Lock size={16} />}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-display text-sm" style={{ color: owned ? t.color : '#71717a' }}>
-                  {titleName(id, player.gender)}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-display text-sm" style={{ color: owned ? t.color : '#71717a' }}>
+                    {titleName(id, player.gender)}
+                  </span>
+                  {(t.tier ?? 0) > 0 && (
+                    <span
+                      className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold"
+                      style={{ borderColor: owned ? t.color : '#3f3f46', color: owned ? t.color : '#52525b' }}
+                    >
+                      Ур. {t.tier}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-0.5 text-[11px] text-zinc-400">{t.bonus}</div>
                 <div className="mt-1 text-[10px] text-zinc-600">{t.req}</div>
@@ -111,7 +121,14 @@ function AchievementsTab({ player, justUnlocked }) {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-display text-sm text-zinc-100">{a.name}</span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="font-display text-sm text-zinc-100">{a.name}</span>
+                    {(a.tier ?? 0) > 0 && a.track && (
+                      <span className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold" style={{ borderColor: a.color, color: a.color }}>
+                        Ур. {a.tier}
+                      </span>
+                    )}
+                  </div>
                   {done && (
                     <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider" style={{ color: a.color }}>
                       Получено

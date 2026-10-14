@@ -131,6 +131,7 @@ export function addCustomRecipe(p, { name, notes, ingredients }) {
     notes: (notes || '').trim(),
     ingredients: (ingredients || '').trim(),
     cooks: 0,
+    archived: false,
     createdAt: Date.now(),
   };
   return {
@@ -139,11 +140,53 @@ export function addCustomRecipe(p, { name, notes, ingredients }) {
   };
 }
 
+export function editCustomRecipe(p, recipeId, { name, notes, ingredients }) {
+  const list = p.customRecipes ?? [];
+  const idx = list.findIndex((r) => r.id === recipeId);
+  if (idx < 0) return { error: 'Рецепт не найден' };
+  const title = (name || '').trim();
+  if (title.length < 2) return { error: 'Введите название рецепта' };
+  const prev = list[idx];
+  const updated = {
+    ...prev,
+    name: title,
+    notes: (notes || '').trim(),
+    ingredients: (ingredients || '').trim(),
+    updatedAt: Date.now(),
+  };
+  const nextRecipes = [...list];
+  nextRecipes[idx] = updated;
+  return {
+    player: { ...p, customRecipes: nextRecipes },
+    events: [{ type: 'title', text: `Рецепт «${updated.name}» обновлён` }],
+  };
+}
+
+export function archiveCustomRecipe(p, recipeId, archived = true) {
+  const list = p.customRecipes ?? [];
+  const idx = list.findIndex((r) => r.id === recipeId);
+  if (idx < 0) return { error: 'Рецепт не найден' };
+  const prev = list[idx];
+  const updated = { ...prev, archived: Boolean(archived) };
+  const nextRecipes = [...list];
+  nextRecipes[idx] = updated;
+  return {
+    player: { ...p, customRecipes: nextRecipes },
+    events: [
+      {
+        type: 'gain',
+        text: archived ? `«${prev.name}» отправлен в архив` : `«${prev.name}» возвращён из архива`,
+      },
+    ],
+  };
+}
+
 export function cookCustomRecipe(p, recipeId) {
   const list = p.customRecipes ?? [];
   const idx = list.findIndex((r) => r.id === recipeId);
   if (idx < 0) return { error: 'Рецепт не найден' };
   const recipe = list[idx];
+  if (recipe.archived) return { error: 'Рецепт в архиве — сначала верните его' };
   const factor = masteryXpFactor(recipe.cooks);
   const skillGain = Math.round(COOKING_SKILL_BASE * factor * 100) / 100;
   const xpGain = Math.max(0, Math.round(12 * factor));
