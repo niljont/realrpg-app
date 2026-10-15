@@ -1,5 +1,5 @@
-const CACHE = 'system-rpg-v2';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg'];
+const CACHE = 'system-rpg-v3';
+const SHELL = ['/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
@@ -8,9 +8,19 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))),
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await self.clients.claim();
+    })(),
   );
-  self.clients.claim();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+  if (event.data?.type === 'CLEAR_CACHES') {
+    event.waitUntil(caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))));
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -18,39 +28,33 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
 
-  // Навигация и бандлы Vite: сеть важнее кэша, иначе телефон залипает на старом коде.
+  // HTML и бандлы — только сеть (без устаревшего index.html).
   const isNavigate = request.mode === 'navigate';
   const isAppAsset =
-    url.origin === self.location.origin &&
-    (url.pathname.startsWith('/assets/') ||
-      request.destination === 'script' ||
-      request.destination === 'style' ||
-      request.destination === 'worker');
+    url.pathname.startsWith('/assets/') ||
+    url.pathname === '/sw.js' ||
+    request.destination === 'script' ||
+    request.destination === 'style' ||
+    request.destination === 'worker';
 
   if (isNavigate || isAppAsset) {
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            const key = isNavigate ? '/index.html' : request;
-            caches.open(CACHE).then((c) => c.put(key, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match(isNavigate ? '/index.html' : request)),
+      fetch(request, { cache: 'no-store' }).catch(async () => {
+        const cached = await caches.match(isNavigate ? '/index.html' : request);
+        return cached || Response.error();
+      }),
     );
     return;
   }
 
-  // Остальная статика (иконки и т.п.): cache-first.
   event.respondWith(
     caches.match(request).then(
       (cached) =>
         cached ||
         fetch(request).then((res) => {
-          if (res.ok || res.type === 'opaque') {
+          if (res.ok) {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(request, copy));
           }

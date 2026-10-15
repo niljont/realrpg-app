@@ -43,3 +43,12 @@ export const supabase = createClient(url || 'https://placeholder.supabase.co', a
 });
 
 export const isSupabaseConfigured = Boolean(url && anonKey);
+
+/** Хост проекта (без ключей) — чтобы сверить локалку и прод. */
+export function getSupabaseHost() {
+  try {
+    return url ? new URL(url).host : 'не задан';
+  } catch {
+    return 'не задан';
+  }
+}
