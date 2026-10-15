@@ -44,23 +44,24 @@ export function playerToSaveData(player) {
 /** Локальный игрок → строка public.profiles */
 export function playerToProfileRow(player, userId) {
   const stats = getStats(player);
-  const { level, xp, need } = levelFromXp(player.xp ?? 0);
+  const { level, xp, need } = levelFromXp(Math.floor(Number(player.xp) || 0));
+  const int = (n, fallback = 0) => Math.max(0, Math.floor(Number(n) || fallback));
   return {
     id: userId,
     username: player.name,
-    level,
-    current_exp: xp,
-    exp_to_next: need,
-    strength: stats.STR,
-    endurance: stats.END,
-    agility: stats.AGI,
-    intelligence: stats.INT,
-    willpower: stats.WIL,
-    current_ap: player.ap,
-    max_ap: player.maxAp,
+    level: int(level, 1) || 1,
+    current_exp: int(xp),
+    exp_to_next: int(need, 1) || 1,
+    strength: int(stats.STR, 1) || 1,
+    endurance: int(stats.END, 1) || 1,
+    agility: int(stats.AGI, 1) || 1,
+    intelligence: int(stats.INT, 1) || 1,
+    willpower: int(stats.WIL, 1) || 1,
+    current_ap: int(player.ap),
+    max_ap: Math.max(1, int(player.maxAp, 1)),
     gold: paliumToGold(player.palium),
-    total_reps: Math.round(totalRepsFromPlayer(player)),
-    breach_wins: player.world?.breachWins ?? 0,
+    total_reps: int(totalRepsFromPlayer(player)),
+    breach_wins: int(player.world?.breachWins),
     active_title: player.activeTitle || 'wanderer',
     gender: player.gender === 'female' ? 'female' : 'male',
     save_data: playerToSaveData(player),

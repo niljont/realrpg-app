@@ -12,20 +12,23 @@ export const STAT_META = {
 
 // rate — сколько поинтов даёт одна единица (повтор / секунда / км / минута).
 // apCost — переопределяет стоимость записи в дневном трекере.
-/** Сложность для гири/гантелей: поинты за 1 повтор. */
+/** Сложность для упражнения со снарядом: поинты за 1 повтор. */
 export const LOAD_DIFFICULTIES = [
   { id: 'easy', label: 'Легко', rate: 0.5 },
   { id: 'normal', label: 'Нормально', rate: 1 },
   { id: 'hard', label: 'Сложно', rate: 1.5 },
+  { id: 'extreme', label: 'Оч. сложно', rate: 2 },
 ];
+
+/** Награда за выполнение личного квеста Воли. */
+export const CUSTOM_QUEST_POINTS = 25;
 
 export const EXERCISES = {
   STR: [
     { id: 'pushups', name: 'Отжимания', unit: 'повт.', rate: 1 },
     { id: 'pullups', name: 'Подтягивания', unit: 'повт.', rate: 3 },
     { id: 'legsquats', name: 'Приседания', unit: 'повт.', rate: 1 },
-    { id: 'kettlebell', name: 'Гиря', unit: 'повт.', rate: 1, loadDifficulty: true },
-    { id: 'dumbbells', name: 'Гантели', unit: 'повт.', rate: 1, loadDifficulty: true },
+    { id: 'implement', name: 'Упражнение со снарядом', unit: 'повт.', rate: 1, loadDifficulty: true },
   ],
   END: [
     { id: 'abs', name: 'Пресс', unit: 'повт.', rate: 1 },
@@ -41,11 +44,10 @@ export const EXERCISES = {
     { id: 'reading', name: 'Чтение', unit: 'мин', rate: 1 },
     { id: 'study', name: 'Учёба', unit: 'мин', rate: 1.5 },
     { id: 'languages', name: 'Языки', unit: 'мин', rate: 1.5 },
-    { id: 'chess', name: 'Партия шахмат', unit: 'парт.', rate: 25 },
+    { id: 'chess', name: 'Партия шахмат', unit: 'парт.', rate: 10 },
   ],
   WIL: [
     { id: 'meditation', name: 'Медитация', unit: 'мин', rate: 2 },
-    { id: 'coldshower', name: 'Холодный душ', unit: 'мин', rate: 5 },
   ],
 };
 
@@ -377,13 +379,37 @@ export function damageMultiplier(p, now = Date.now()) {
 export const exercisePoints = (ex, amount, rateOverride) => {
   const rate = rateOverride != null ? Number(rateOverride) : ex.rate;
   const raw = Math.max(0, (Number(amount) || 0) * rate);
-  // Сохраняем половинки (0.5 / 1.5) до финального округления в applyTraining.
+  // Промежуточный расчёт может быть дробным; в сейв/синк идёт floorAwardPoints.
   return Math.round(raw * 100) / 100;
 };
 
-export const findExercise = (stat, id) => EXERCISES[stat]?.find((e) => e.id === id);
+/** Итоговые очки прокачки — целые ( вниз ), иначе Postgres integer ломает синк. */
+export function floorAwardPoints(raw) {
+  return Math.max(0, Math.floor(Number(raw) || 0));
+}
 
-export const exerciseById = (id) => Object.values(EXERCISES).flat().find((e) => e.id === id);
+export function findExercise(stat, id, p = null) {
+  const built = EXERCISES[stat]?.find((e) => e.id === id);
+  if (built) return built;
+  if (stat === 'WIL' && id && p) {
+    const q = (p.customQuests ?? []).find((x) => x.id === id);
+    if (q) {
+      return {
+        id: q.id,
+        name: q.name,
+        unit: 'квест',
+        rate: CUSTOM_QUEST_POINTS,
+        custom: true,
+        desc: q.desc || '',
+      };
+    }
+  }
+  return undefined;
+}
+
+export const exerciseById = (id, p = null) =>
+  Object.values(EXERCISES).flat().find((e) => e.id === id) ??
+  (p ? (p.customQuests ?? []).find((q) => q.id === id) : null);
 
 export const exerciseApCost = (ex) => ex.apCost ?? TRAINING_AP_COST;
 
@@ -507,6 +533,7 @@ export function createPlayer(name, gender) {
     inscriptionXp: 0,
     cookingSkill: 0,
     customRecipes: [],
+    customQuests: [],
     activeTitle: 'wanderer',
     achievements: [],
     totals: {},
@@ -586,6 +613,7 @@ export function hydratePlayer(p) {
     nodeCooldowns: p.nodeCooldowns ?? {},
     cookCounts: p.cookCounts ?? {},
     customRecipes: p.customRecipes ?? [],
+    customQuests: Array.isArray(p.customQuests) ? p.customQuests : [],
     cookingSkill: p.cookingSkill ?? 0,
     inscriptionXp: p.inscriptionXp ?? 0,
     lastApTick: p.lastApTick ?? Date.now(),
@@ -606,6 +634,14 @@ export function hydratePlayer(p) {
       ...(p.energy ?? {}),
     },
     totals,
+    xp: Math.floor(Number(p.xp) || 0),
+    statPoints: {
+      STR: Math.floor(Number(p.statPoints?.STR) || 0),
+      END: Math.floor(Number(p.statPoints?.END) || 0),
+      AGI: Math.floor(Number(p.statPoints?.AGI) || 0),
+      INT: Math.floor(Number(p.statPoints?.INT) || 0),
+      WIL: Math.floor(Number(p.statPoints?.WIL) || 0),
+    },
     updatedAt: Number(p.updatedAt) || 0,
     nameChangedAt: Number(p.nameChangedAt) || 0,
     version: 7,
@@ -682,13 +718,46 @@ export function savePlayer(p, storageKey = STORAGE_KEY) {
   localStorage.setItem(storageKey, JSON.stringify(p));
 }
 
-function addTotals(totals, stat, values) {
+function addTotals(totals, _stat, values) {
   const next = { ...totals };
-  for (const ex of EXERCISES[stat]) {
-    const amount = Number(values[ex.id]) || 0;
-    if (amount > 0) next[ex.id] = (next[ex.id] ?? 0) + amount;
+  for (const [id, amount] of Object.entries(values ?? {})) {
+    const n = Number(amount) || 0;
+    if (n > 0) next[id] = (next[id] ?? 0) + n;
   }
   return next;
+}
+
+/** Личный квест Воли: название + опциональное описание. */
+export function addCustomQuest(p, { name, desc = '' } = {}) {
+  const title = String(name ?? '').trim();
+  if (!title) return { error: 'Введите название квеста' };
+  if (title.length > 64) return { error: 'Название слишком длинное' };
+  const note = String(desc ?? '').trim().slice(0, 120);
+  const active = (p.customQuests ?? []).filter((q) => !q.archived);
+  if (active.length >= 20) return { error: 'Слишком много квестов (макс. 20)' };
+  const quest = {
+    id: `cq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    name: title,
+    desc: note,
+    createdAt: Date.now(),
+    archived: false,
+  };
+  return {
+    player: { ...p, customQuests: [...(p.customQuests ?? []), quest] },
+    events: [{ type: 'title', text: `Квест Воли: «${title}»` }],
+  };
+}
+
+export function removeCustomQuest(p, questId) {
+  const list = p.customQuests ?? [];
+  if (!list.some((q) => q.id === questId)) return { error: 'Квест не найден' };
+  return {
+    player: {
+      ...p,
+      customQuests: list.map((q) => (q.id === questId ? { ...q, archived: true } : q)),
+    },
+    events: [{ type: 'gain', text: 'Квест скрыт из списка' }],
+  };
 }
 
 export function equipTitle(p, id) {
@@ -699,31 +768,54 @@ export function equipTitle(p, id) {
   };
 }
 
-/** Прокачка: упражнения без траты AP → XP и статы (без Палиума). rateOverride — для гири/гантелей. */
+/** Прокачка: упражнения без траты AP → XP и статы (без Палиума). rateOverride — для снаряда. */
 export function applyTraining(p, stat, exId, amount, rateOverride) {
-  const ex = findExercise(stat, exId);
+  const ex = findExercise(stat, exId, p);
   if (!ex) return { error: 'Неизвестное упражнение' };
+  if (ex.custom && (p.customQuests ?? []).find((q) => q.id === exId)?.archived) {
+    return { error: 'Квест удалён' };
+  }
   if (ex.loadDifficulty && rateOverride == null) return { error: 'Выберите сложность' };
-  const base = exercisePoints(ex, amount, rateOverride);
+  const qty = ex.custom ? 1 : amount;
+  const base = exercisePoints(ex, qty, rateOverride);
   if (base <= 0) return { error: 'Введите количество' };
 
   const now = Date.now();
-  const points = Math.round(base * xpMultiplier(p, stat, now) * 2) / 2; // шаг 0.5
+  const rawPoints = base * xpMultiplier(p, stat, now);
+  const points = floorAwardPoints(rawPoints);
+  if (points <= 0) return { error: 'Слишком мало для записи (нужно ≥ 1 pt после округления вниз)' };
   const events = [];
   const prevLevel = levelFromXp(p.xp).level;
   const prevStat = statLevel(p.statPoints[stat]);
 
   let next = {
     ...p,
-    xp: p.xp + points,
-    statPoints: { ...p.statPoints, [stat]: p.statPoints[stat] + points },
-    totals: addTotals(p.totals, stat, { [exId]: amount }),
-    log: [...(p.log ?? []), { ts: now, date: dayKey(now), stat, exId, amount, points, rate: rateOverride ?? ex.rate }],
+    xp: Math.floor((p.xp ?? 0) + points),
+    statPoints: {
+      ...p.statPoints,
+      [stat]: Math.floor((p.statPoints[stat] ?? 0) + points),
+    },
+    totals: addTotals(p.totals, stat, { [exId]: qty }),
+    log: [
+      ...(p.log ?? []),
+      {
+        ts: now,
+        date: dayKey(now),
+        stat,
+        exId,
+        amount: qty,
+        points,
+        rate: rateOverride ?? ex.rate,
+        custom: Boolean(ex.custom),
+      },
+    ],
   };
 
+  const flooredNote =
+    rawPoints > points ? ` (из ${Math.round(rawPoints * 10) / 10} ↓)` : '';
   events.push({
     type: 'gain',
-    text: `+${points} ${stat} · +${points} XP${points > base ? ` (бонус +${Math.round((points - base) * 2) / 2})` : ''}`,
+    text: `+${points} ${stat} · +${points} XP${flooredNote}${points > base ? ` · бонус` : ''}`,
   });
 
   const newStat = statLevel(next.statPoints[stat]);

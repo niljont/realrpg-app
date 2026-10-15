@@ -12,10 +12,12 @@ import UnlockOverlay from './components/UnlockOverlay';
 import { useAuth } from './context/AuthContext';
 import {
   applyTimeSystems,
+  addCustomQuest,
   applyTraining,
   createPlayer,
   equipTitle,
   loadPlayer,
+  removeCustomQuest,
   renamePlayer,
   savePlayer,
   sealResult,
@@ -341,7 +343,12 @@ export default function App() {
             />
           )}
           {tab === 'training' && (
-            <TrainingScreen player={player} onTrain={(s, id, amt, rate) => commit(applyTraining(player, s, id, amt, rate))} />
+            <TrainingScreen
+              player={player}
+              onTrain={(s, id, amt, rate) => commit(applyTraining(player, s, id, amt, rate))}
+              onAddQuest={(data) => commit(sealResult(addCustomQuest(player, data)))}
+              onRemoveQuest={(id) => commit(sealResult(removeCustomQuest(player, id)))}
+            />
           )}
           {tab === 'world' && (
             <WorldScreen
