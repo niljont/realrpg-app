@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Backpack, RotateCcw, Store, X } from 'lucide-react';
+import { Backpack, Store, X } from 'lucide-react';
 import StatRadar from './StatRadar';
 import Modal from './Modal';
 import { STATS, STAT_META, getStats, levelFromXp, statProgress } from '../lib/game';
@@ -251,7 +251,6 @@ function ShopPanel({ player, onSell, onBuy }) {
 
 export default function StatusScreen({
   player,
-  onReset,
   onEat,
   onUseItem,
   onHealthyMeal,
@@ -311,13 +310,6 @@ export default function StatusScreen({
           );
         })}
       </section>
-
-      <button
-        onClick={() => confirm('Стереть профиль Игрока? Весь прогресс будет потерян.') && onReset()}
-        className="mx-auto flex items-center gap-1.5 text-[11px] text-zinc-600 hover:text-red-400"
-      >
-        <RotateCcw size={12} /> Сбросить профиль
-      </button>
 
       {panel === 'inventory' && (
         <Modal title="Инвентарь" onClose={() => setPanel(null)}>

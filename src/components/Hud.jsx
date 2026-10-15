@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Brain, Crown, Heart, Utensils, Zap, Plus, Skull, Gem, LogOut } from 'lucide-react';
+import { Brain, Crown, Heart, Utensils, Zap, Plus, Skull, Gem, Settings } from 'lucide-react';
 import {
   BUFF_INFO,
   PALIUM_COLOR,
@@ -15,6 +15,7 @@ import {
   msUntilNextAp,
   titleName,
 } from '../lib/game';
+import SettingsModal from './SettingsModal';
 
 function Bar({ icon: Icon, label, value, max, from, to, glow, children, onBarClick }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
@@ -71,7 +72,7 @@ function TipCard({ title, body, color, onClose }) {
   );
 }
 
-export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut }) {
+export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onResetAccount }) {
   const { level, xp, need } = levelFromXp(player.xp);
   const hp = maxHp(player);
   const title = TITLES[player.activeTitle] ?? TITLES.wanderer;
@@ -81,6 +82,7 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut }) {
   const clogged = isClogged(player);
   const [tip, setTip] = useState(null);
   const [now, setNow] = useState(Date.now());
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (tip?.type !== 'ap') return undefined;
@@ -97,6 +99,7 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut }) {
       : `До +1 AP: ${formatDuration(apLeft)} · реген каждые 30 мин. Утром AP восстанавливается до max.`;
 
   return (
+    <>
     <header className="sticky top-0 z-30 border-b border-neon/20 bg-void/85 px-4 pt-[max(env(safe-area-inset-top),12px)] pb-3 backdrop-blur-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -159,7 +162,7 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut }) {
             )}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <div className="flex shrink-0 items-start gap-1.5">
           <div
             className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold tabular-nums"
             style={{ borderColor: `${PALIUM_COLOR}55`, color: PALIUM_COLOR, background: `${PALIUM_COLOR}14`, boxShadow: `0 0 12px ${PALIUM_COLOR}33` }}
@@ -168,16 +171,15 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut }) {
             <Gem size={13} style={{ filter: `drop-shadow(0 0 4px ${PALIUM_COLOR})` }} />
             {formatPalium(player.palium)}
           </div>
-          {onSignOut && (
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 px-2 py-1 text-[10px] font-bold text-zinc-400 transition hover:border-red-500/50 hover:text-red-300"
-              title="Выйти"
-            >
-              <LogOut size={11} /> Выйти
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="inline-flex h-9 w-9 touch-manipulation items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/70 text-zinc-400 transition hover:border-neon/40 hover:text-neon active:scale-95"
+            title="Настройки"
+            aria-label="Настройки"
+          >
+            <Settings size={16} />
+          </button>
         </div>
       </div>
 
@@ -228,5 +230,14 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut }) {
         </div>
       </div>
     </header>
+
+    {settingsOpen && (
+      <SettingsModal
+        onClose={() => setSettingsOpen(false)}
+        onSignOut={onSignOut}
+        onResetAccount={onResetAccount}
+      />
+    )}
+    </>
   );
 }

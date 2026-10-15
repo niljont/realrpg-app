@@ -280,18 +280,17 @@ export default function App() {
             setTab('titles');
           }}
           onSignOut={handleSignOut}
+          onResetAccount={async () => {
+            const fresh = createPlayer(player.name, player.gender || 'male');
+            setPlayer(fresh);
+            await syncPlayerToCloud(stampPlayer(fresh));
+          }}
         />
 
         <main className="flex-1 px-4 pt-4 pb-28">
           {tab === 'status' && (
             <StatusScreen
               player={player}
-              onReset={() => {
-                if (!confirm('Сбросить локальный прогресс этого аккаунта?')) return;
-                const fresh = createPlayer(player.name, player.gender || 'male');
-                setPlayer(fresh);
-                syncPlayerToCloud(fresh);
-              }}
               onEat={(id) => run(eatDish, id)}
               onUseItem={(id) => run(useInventoryItem, id)}
               onHealthyMeal={() => run(logHealthyMeal)}
