@@ -170,8 +170,26 @@ function AchievementsTab({ player, justUnlocked }) {
   );
 }
 
-export default function AchievementsScreen({ player, onEquip, initialTab = 'titles', justUnlocked }) {
+export default function AchievementsScreen({ player, onEquip, initialTab = 'titles', justUnlocked, compact = false }) {
   const [tab, setTab] = useState(initialTab);
+
+  const body = (
+    <>
+      <Segmented
+        value={tab}
+        onChange={setTab}
+        options={[
+          { id: 'titles', label: 'Титулы' },
+          { id: 'achievements', label: 'Достижения' },
+        ]}
+      />
+      {tab === 'titles' ? <TitlesTab player={player} onEquip={onEquip} /> : <AchievementsTab player={player} justUnlocked={justUnlocked} />}
+    </>
+  );
+
+  if (compact) {
+    return <div className="space-y-3">{body}</div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -180,15 +198,7 @@ export default function AchievementsScreen({ player, onEquip, initialTab = 'titl
           <Sparkles size={16} className="text-neon" />
           <h2 className="font-display text-sm tracking-widest text-neon/90">ДОСТИЖЕНИЯ И ТИТУЛЫ</h2>
         </div>
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          options={[
-            { id: 'titles', label: 'Титулы' },
-            { id: 'achievements', label: 'Достижения' },
-          ]}
-        />
-        {tab === 'titles' ? <TitlesTab player={player} onEquip={onEquip} /> : <AchievementsTab player={player} justUnlocked={justUnlocked} />}
+        {body}
       </section>
     </div>
   );

@@ -1,4 +1,13 @@
-import { damageMultiplier, dayKey, formatPalium, getStats, maxHp, statMultiplier } from './game';
+import { dayKey, formatPalium, getStats, withHp, statMultiplier } from './game';
+import {
+  COMBAT_AP_MAX,
+  attackApCost,
+  getGearBonuses,
+  getPlayerHp,
+  mitigateIncoming,
+  playerMaxHp,
+  rollPlayerAttack,
+} from './equipment';
 import { ITEMS, emptyInventory } from './world';
 
 /* ---------- ранги брешей ---------- */
@@ -10,11 +19,15 @@ export const BREACH_RANKS = {
     color: '#22c55e',
     ap: 2,
     enemies: 10,
-    hpMul: 0.85,
-    atkMul: 0.8,
+    /** Множители абсолютной силы (не от статов игрока). */
+    hpMul: 1.35,
+    atkMul: 1.45,
     palium: [0.012, 0.022],
     bonusChance: 0.15,
     bonus: 0.008,
+    /** Примерный уровень врагов (для подсказки на радаре). */
+    levelMin: 3,
+    levelMax: 18,
   },
   E: {
     id: 'E',
@@ -22,11 +35,13 @@ export const BREACH_RANKS = {
     color: '#3b82f6',
     ap: 3,
     enemies: 12,
-    hpMul: 1.15,
-    atkMul: 1.05,
+    hpMul: 1.7,
+    atkMul: 1.7,
     palium: [0.02, 0.038],
     bonusChance: 0.22,
     bonus: 0.012,
+    levelMin: 14,
+    levelMax: 32,
   },
   D: {
     id: 'D',
@@ -34,11 +49,13 @@ export const BREACH_RANKS = {
     color: '#a855f7',
     ap: 4,
     enemies: 15,
-    hpMul: 1.55,
-    atkMul: 1.35,
+    hpMul: 2.15,
+    atkMul: 2.0,
     palium: [0.035, 0.07],
     bonusChance: 0.35,
     bonus: 0.022,
+    levelMin: 28,
+    levelMax: 50,
   },
 };
 
@@ -100,7 +117,13 @@ const ENEMY_NAMES = [
 
 export const RADAR_REFRESH_MS = 60 * 60 * 1000;
 export const RADAR_BREACH_COUNT = 5;
-export const RADAR_VERSION = 2;
+/** v3: персональный радар (сид от игрока), а не общий на всех. */
+export const RADAR_VERSION = 3;
+
+export function rankLevelHint(rank) {
+  const def = BREACH_RANKS[rank] ?? BREACH_RANKS.F;
+  return `Ур. врагов ~${def.levelMin}–${def.levelMax}`;
+}
 
 export function hourKey(now = Date.now()) {
   const d = new Date(now);
@@ -125,13 +148,20 @@ function mulberry32(seed) {
   };
 }
 
-function hashHour(key) {
+function hashStr(key) {
   let h = 2166136261;
   for (let i = 0; i < key.length; i++) {
     h ^= key.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
+}
+
+/** Стабильный персональный кусок сида (не сбрасывается сменой имени). */
+export function playerRadarSeed(p) {
+  const created = p?.createdAt ?? 0;
+  const gender = p?.gender ?? 'x';
+  return hashStr(`radar|${created}|${gender}`);
 }
 
 function pickRank(rng) {
@@ -150,11 +180,13 @@ function breachName(rng) {
   return `${a} ${b}`;
 }
 
-export function generateRadar(now = Date.now()) {
+export function generateRadar(now = Date.now(), p = null) {
   const key = hourKey(now);
-  const rng = mulberry32(hashHour(key));
+  const personal = playerRadarSeed(p);
+  const rng = mulberry32(hashStr(`${key}:${personal}`));
   const breaches = [];
   const span = MAX_BREACH_DISTANCE_KM - MIN_BREACH_DISTANCE_KM;
+  const tag = personal.toString(36);
   for (let i = 0; i < RADAR_BREACH_COUNT; i++) {
     const rank = pickRank(rng);
     const def = BREACH_RANKS[rank];
@@ -164,9 +196,11 @@ export function generateRadar(now = Date.now()) {
     const stepsCost = stepsForDistance(dist);
     const radarR = 0.12 + (dist / MAX_BREACH_DISTANCE_KM) * 0.78;
     breaches.push({
-      id: `br_${key}_${i}`,
+      id: `br_${key}_${tag}_${i}`,
       name: breachName(rng),
       rank,
+      levelMin: def.levelMin,
+      levelMax: def.levelMax,
       stepsCost,
       apCost: def.ap,
       angle,
@@ -176,23 +210,31 @@ export function generateRadar(now = Date.now()) {
       traveled: false,
     });
   }
-  return { version: RADAR_VERSION, hourKey: key, generatedAt: now, breaches };
+  return {
+    version: RADAR_VERSION,
+    hourKey: key,
+    playerSeed: personal,
+    generatedAt: now,
+    breaches,
+  };
 }
 
-/** Обновляет радар, если прошёл час или сменилась схема. */
+/** Обновляет радар, если прошёл час, сменилась схема или игрок. */
 export function ensureRadar(p, now = Date.now()) {
   const key = hourKey(now);
+  const personal = playerRadarSeed(p);
   const cur = p.radar;
   if (
     cur?.version === RADAR_VERSION &&
     cur?.hourKey === key &&
+    cur?.playerSeed === personal &&
     Array.isArray(cur.breaches) &&
     cur.breaches.length
   ) {
     return { player: p, changed: false };
   }
   return {
-    player: { ...p, radar: generateRadar(now) },
+    player: { ...p, radar: generateRadar(now, p) },
     changed: true,
   };
 }
@@ -277,20 +319,34 @@ function addPalium(a, b) {
   return Math.round(((a ?? 0) + (b ?? 0)) * 1000) / 1000;
 }
 
-function makeEnemy(rank, stats, index, total, forced) {
+/** Уровень угрозы слота в волне (от levelMin к levelMax). Не зависит от игрока. */
+function enemyLevelForSlot(rank, index, total) {
+  const def = BREACH_RANKS[rank] ?? BREACH_RANKS.F;
+  const t = total <= 1 ? 0 : index / (total - 1);
+  return def.levelMin + t * (def.levelMax - def.levelMin);
+}
+
+/**
+ * Враги с абсолютной силой по рангу.
+ * Стартовый фулл-сет + STR2 должен проходить F с риском (хилы/блок/отступление), а не фармить на автопилоте.
+ */
+function makeEnemy(rank, index, total, forced) {
   const def = BREACH_RANKS[rank] ?? BREACH_RANKS.F;
   const isBoss = index >= total - 1;
   const pool = isBoss ? ENEMY_NAMES.filter((e) => e.boss) : ENEMY_NAMES.filter((e) => !e.boss);
   const tpl = forced ?? pool[Math.floor(Math.random() * pool.length)] ?? ENEMY_NAMES[0];
-  const scale = 0.7 + (index / Math.max(1, total - 1)) * 0.55;
-  const bossMul = isBoss ? 1.45 : 1;
-  const hp = Math.max(10, Math.round((8 + stats.END * 4 * def.hpMul) * scale * bossMul));
-  const atk = Math.max(2, Math.round((2 + stats.STR * 0.3 + stats.END * 0.22 * def.atkMul) * scale * bossMul));
+  const level = Math.round(enemyLevelForSlot(rank, index, total));
+  // Средние мобы волны чуть жирнее ранних; босс заметно жёстче.
+  const waveMul = 1 + (total <= 1 ? 0 : index / (total - 1)) * 0.35;
+  const bossMul = isBoss ? 1.85 : 1;
+  const hp = Math.max(36, Math.round((30 + level * 6.8) * def.hpMul * waveMul * bossMul));
+  const atk = Math.max(8, Math.round((7 + level * 1.45) * def.atkMul * waveMul * bossMul));
   return {
     name: tpl.name,
     emoji: tpl.emoji,
     boss: Boolean(isBoss || tpl.boss),
     rank,
+    level,
     hp,
     maxHp: hp,
     atk,
@@ -300,10 +356,10 @@ function makeEnemy(rank, stats, index, total, forced) {
   };
 }
 
-function buildEnemyWave(rank, stats) {
+function buildEnemyWave(rank) {
   const def = BREACH_RANKS[rank] ?? BREACH_RANKS.F;
   const total = Math.max(MIN_BREACH_ENEMIES, def.enemies ?? MIN_BREACH_ENEMIES);
-  return Array.from({ length: total }, (_, i) => makeEnemy(rank, stats, i, total));
+  return Array.from({ length: total }, (_, i) => makeEnemy(rank, i, total));
 }
 
 function collectKillLoot(session, enemy) {
@@ -328,6 +384,33 @@ function collectKillLoot(session, enemy) {
   return gain;
 }
 
+function makeEnemyIntent(enemy) {
+  const roll = Math.random();
+  if (roll < 0.55) {
+    const damage = Math.max(3, enemy.atk + Math.floor(Math.random() * 4) - 1);
+    return { type: 'attack', label: 'Атака', icon: '⚔️', damage };
+  }
+  if (roll < 0.8) {
+    const armor = Math.max(2, Math.round(2 + (enemy.level ?? 1) * 0.45));
+    return { type: 'defend', label: 'Защита', icon: '🛡️', armor };
+  }
+  const damage = Math.max(4, Math.round(enemy.atk * 1.4 + 2));
+  return { type: 'special', label: 'Спецприём', icon: '⚡', damage };
+}
+
+function cloneSession(s) {
+  const room = s.room ?? 0;
+  const enemies = (s.enemies ?? [s.enemy]).map((e, i) => (i === room ? { ...e } : { ...e }));
+  return {
+    ...s,
+    enemies,
+    enemy: enemies[room],
+    lootItems: { ...(s.lootItems ?? {}) },
+    log: [...(s.log ?? [])],
+    room,
+  };
+}
+
 export function enterBreach(p, breachId) {
   if (p.breach?.active) return { error: 'Вы уже внутри Бреши' };
 
@@ -340,109 +423,256 @@ export function enterBreach(p, breachId) {
   }
 
   const stats = combatStats(ensured);
-  const hp = Math.max(1, Math.round(maxHp(ensured) * statMultiplier(ensured)));
-  const enemies = buildEnemyWave(breach.rank, stats);
+  const gear = getGearBonuses(ensured);
+  const max = playerMaxHp(ensured);
+  const cur = getPlayerHp(ensured);
+  if (cur <= 0) return { error: 'Слишком мало HP для входа в Брешь' };
+  const enemies = buildEnemyWave(breach.rank);
   const first = enemies[0];
+  const intent = makeEnemyIntent(first);
   const session = {
     active: true,
+    tactical: true,
     breachId: breach.id,
     name: breach.name,
     rank: breach.rank,
     room: 0,
     enemies,
     enemy: first,
-    playerHp: hp,
-    playerMaxHp: hp,
-    turn: 0,
+    playerHp: cur,
+    playerMaxHp: max,
+    playerShield: gear.startShield ?? 0,
+    playerMaxShield: gear.startShield ?? 0,
+    combatAp: COMBAT_AP_MAX,
+    turn: 1,
+    phase: 'player',
+    enemyIntent: intent,
+    enemyArmorBuff: 0,
+    defendAbsorb: 0,
+    stanceReduce: 0,
+    trinketUsed: false,
+    ui: 'fight',
     lootPalium: 0,
     lootItems: {},
     log: [
       `[СИСТЕМА] Синхронизация с «${breach.name}» (${BREACH_RANKS[breach.rank].label})…`,
-      `[СИСТЕМА] Обнаружено угроз: ${enemies.length}. Зачистка обязательна.`,
-      `[СИСТЕМА] Цель 1/${enemies.length}: ${first.emoji} ${first.name} · HP ${first.hp}`,
-      `[СИСТЕМА] Параметры Игрока: Сила ${stats.STR} · Ловкость ${stats.AGI} · Выносливость ${stats.END}`,
+      `[СИСТЕМА] Тактический режим. Combat AP: ${COMBAT_AP_MAX} за ход (глобальная энергия не тратится).`,
+      `[СИСТЕМА] Цель 1/${enemies.length}: ${first.emoji} ${first.name} · Ур.${first.level} · HP ${first.hp}`,
+      `[СИСТЕМА] Намерение врага: ${intent.icon} ${intent.label}${intent.damage != null ? ` (${intent.damage})` : ''}${intent.armor != null ? ` (+${intent.armor} броня)` : ''}`,
+      `[СИСТЕМА] Игрок: HP ${cur}/${max} · STR ${stats.STR} · AGI ${stats.AGI} · END ${stats.END} · INT ${stats.INT} · Броня ${gear.armor} · Щит ${gear.startShield}`,
     ],
   };
 
   return {
     player: {
-      ...ensured,
+      ...withHp(ensured, cur, max),
       ap: ensured.ap - breach.apCost,
       breach: session,
-      // Брешь снимается с радара при входе — после выхода уже не вернётся.
       radar: {
         ...ensured.radar,
         breaches: ensured.radar.breaches.filter((b) => b.id !== breachId),
       },
     },
-    events: [{ type: 'energy', text: `−${breach.apCost} AP · Вход в Брешь «${breach.name}» (${enemies.length} врагов)` }],
+    events: [{ type: 'energy', text: `−${breach.apCost} AP · Вход в Брешь «${breach.name}»` }],
   };
 }
 
-function dodgeChance(agi) {
-  return Math.min(0.45, 0.08 + agi * 0.035);
+function applyPlayerDamageToEnemy(session, dmg) {
+  const armor = session.enemyArmorBuff ?? 0;
+  const dealt = Math.max(1, dmg - armor);
+  session.enemy.hp = Math.max(0, session.enemy.hp - dealt);
+  session.enemies[session.room] = session.enemy;
+  return dealt;
 }
 
-export function breachAttack(p) {
+function onEnemyDefeated(p, session) {
+  const gain = collectKillLoot(session, session.enemy);
+  session.log.push(`[СИСТЕМА] ${session.enemy.name} повержен.`);
+  session.ui = 'victory';
+  session.victory = {
+    name: session.enemy.name,
+    gain,
+    final: session.room >= session.enemies.length - 1,
+  };
+  session.phase = 'victory';
+  session.defendAbsorb = 0;
+  session.stanceReduce = 0;
+  const max = playerMaxHp(p);
+  return {
+    player: { ...withHp(p, session.playerHp, max), breach: session },
+    events: [{ type: 'gain', text: `${session.enemy.name} повержен · +${formatPalium(gain)} Палиум` }],
+  };
+}
+
+/** Атака оружием (тратит Combat AP). */
+export function breachCombatStrike(p) {
   const s = p.breach;
   if (!s?.active) return { error: 'Вы не в Бреши' };
+  if (s.ui === 'victory') return { error: 'Сначала заберите победу' };
+  if (s.phase !== 'player') return { error: 'Сейчас ход врага' };
 
-  const stats = combatStats(p);
-  const enemies = (s.enemies ?? [s.enemy]).map((e, i) => (i === (s.room ?? 0) ? { ...e } : { ...e }));
-  const room = s.room ?? 0;
-  const session = {
-    ...s,
-    enemies,
-    enemy: enemies[room],
-    lootItems: { ...s.lootItems },
-    log: [...s.log],
-    turn: s.turn + 1,
-    room,
-  };
+  const cost = attackApCost(p);
+  if ((s.combatAp ?? 0) < cost) return { error: `Нужно ${cost} Combat AP` };
 
-  const strDmg = Math.max(
-    1,
-    Math.floor((3 + stats.STR * 2.5 + Math.floor(Math.random() * (2 + stats.STR))) * damageMultiplier(p)),
+  const session = cloneSession(s);
+  session.combatAp -= cost;
+  const attack = rollPlayerAttack(p);
+  let dmg = attack.dmg;
+  const dealt = applyPlayerDamageToEnemy(session, dmg);
+  const kind = attack.magic ? 'маг. урон' : 'урон';
+  session.log.push(
+    `[ХОД ${session.turn}] −${cost} AP · ${attack.label}: ${dealt} ${kind}${attack.crit ? ' · КРИТ' : ''}${session.enemyArmorBuff ? ` (броня врага −${session.enemyArmorBuff})` : ''}.`,
   );
-  session.enemy.hp = Math.max(0, session.enemy.hp - strDmg);
-  enemies[room] = session.enemy;
-  session.log.push(`[ХОД ${session.turn}] Атака нанесла ${strDmg} урона на основе Силы.`);
 
-  if (session.enemy.hp <= 0) {
-    const gain = collectKillLoot(session, session.enemy);
-    const events = [{ type: 'gain', text: `${session.enemy.name} повержен · +${formatPalium(gain)} Палиум` }];
+  if (session.enemy.hp <= 0) return onEnemyDefeated(p, session);
+  const max = playerMaxHp(p);
+  return { player: { ...withHp(p, session.playerHp, max), breach: session }, events: [] };
+}
 
-    if (session.room >= enemies.length - 1) {
-      session.log.push(`[СИСТЕМА] Все ${enemies.length} угроз нейтрализованы. Брешь стабилизирована.`);
-      return finishBreach({ ...p, breach: session }, { keepLoot: true, cleared: true }, events);
-    }
+/** Блок щитом / защитная стойка (1 Combat AP). */
+export function breachCombatDefend(p) {
+  const s = p.breach;
+  if (!s?.active) return { error: 'Вы не в Бреши' };
+  if (s.ui === 'victory') return { error: 'Сначала заберите победу' };
+  if (s.phase !== 'player') return { error: 'Сейчас ход врага' };
+  if ((s.combatAp ?? 0) < 1) return { error: 'Нужно 1 Combat AP' };
 
-    session.room += 1;
-    session.enemy = enemies[session.room];
-    const tag = session.enemy.boss ? ' · ХОЗЯИН' : '';
-    session.log.push(
-      `[СИСТЕМА] Следующая цель ${session.room + 1}/${enemies.length}${tag}: ${session.enemy.emoji} ${session.enemy.name}`,
-    );
-    return { player: { ...p, breach: session }, events };
-  }
+  const session = cloneSession(s);
+  session.combatAp -= 1;
+  const gear = getGearBonuses(p);
+  const stats = combatStats(p);
 
-  const dodge = Math.random() < dodgeChance(stats.AGI);
-  if (dodge) {
-    session.log.push(`[ХОД ${session.turn}] Уклонение на основе Ловкости. Урон врага = 0.`);
+  if (gear.hasShield) {
+    session.defendAbsorb = (stats.END ?? 1) * 2 + (gear.shieldArmor ?? 0);
+    session.stanceReduce = 0;
+    session.log.push(`[ХОД ${session.turn}] Блок щитом: поглощение ${session.defendAbsorb}.`);
   } else {
-    const edmg = Math.max(1, session.enemy.atk + Math.floor(Math.random() * 3) - 1);
-    session.playerHp = Math.max(0, session.playerHp - edmg);
-    session.log.push(`[ХОД ${session.turn}] ${session.enemy.name} наносит ${edmg} урона.`);
+    session.stanceReduce = 0.25;
+    session.defendAbsorb = 0;
+    session.log.push(`[ХОД ${session.turn}] Защитная стойка: −25% входящего урона.`);
   }
+  return { player: { ...p, breach: session }, events: [] };
+}
+
+/** Аксессуар «Глаз аномалии» — раз в бой. */
+export function breachCombatTrinket(p) {
+  const s = p.breach;
+  if (!s?.active) return { error: 'Вы не в Бреши' };
+  if (s.trinketUsed) return { error: 'Аксессуар уже использован в этом бою' };
+  const gear = getGearBonuses(p);
+  if (!gear.trinketShield) return { error: 'Нет подходящего аксессуара' };
+
+  const session = cloneSession(s);
+  session.trinketUsed = true;
+  session.playerShield = (session.playerShield ?? 0) + gear.trinketShield;
+  session.playerMaxShield = Math.max(session.playerMaxShield ?? 0, session.playerShield);
+  session.log.push(`[ХОД ${session.turn}] Глаз аномалии: +${gear.trinketShield} щита.`);
+  return { player: { ...p, breach: session }, events: [{ type: 'energy', text: `+${gear.trinketShield} щита` }] };
+}
+
+function resolveEnemyTurn(p, session) {
+  const intent = session.enemyIntent ?? makeEnemyIntent(session.enemy);
+  const gear = getGearBonuses(p);
+  const stats = combatStats(p);
+
+  if (intent.type === 'defend') {
+    session.enemyArmorBuff = intent.armor ?? 0;
+    session.log.push(`[ВРАГ] ${session.enemy.name}: ${intent.icon} Защита (+${session.enemyArmorBuff} броня до вашего удара).`);
+  } else {
+    session.enemyArmorBuff = 0;
+    let raw = intent.damage ?? session.enemy.atk;
+    const dodgeChance = Math.min(0.55, 0.04 + stats.AGI * 0.022 + (gear.dodgeChance ?? 0));
+    if (Math.random() < dodgeChance) {
+      session.log.push(`[ВРАГ] ${session.enemy.name}: ${intent.icon} ${intent.label} — уклонение!`);
+    } else {
+      let absorb = session.defendAbsorb ?? 0;
+      const mit = mitigateIncoming(p, raw, { stanceReduce: session.stanceReduce ?? 0, absorb });
+      absorb = mit.absorbLeft;
+      let dmg = mit.damage;
+      // сначала щит
+      if ((session.playerShield ?? 0) > 0 && dmg > 0) {
+        const sh = Math.min(session.playerShield, dmg);
+        session.playerShield -= sh;
+        dmg -= sh;
+        session.log.push(`[ВРАГ] Щит поглотил ${sh}.`);
+      }
+      session.playerHp = Math.max(0, session.playerHp - dmg);
+      session.defendAbsorb = 0;
+      session.log.push(
+        `[ВРАГ] ${session.enemy.name}: ${intent.icon} ${intent.label} → ${dmg} урона (броня игрока ${mit.armor}${session.stanceReduce ? ', стойка' : ''}).`,
+      );
+    }
+  }
+
+  session.stanceReduce = 0;
+  session.defendAbsorb = 0;
+  session.enemyIntent = makeEnemyIntent(session.enemy);
+  session.combatAp = COMBAT_AP_MAX;
+  session.turn += 1;
+  session.phase = 'player';
+  session.log.push(
+    `[СИСТЕМА] Ход ${session.turn}. Combat AP: ${COMBAT_AP_MAX}. Намерение: ${session.enemyIntent.icon} ${session.enemyIntent.label}${session.enemyIntent.damage != null ? ` (${session.enemyIntent.damage})` : ''}`,
+  );
+}
+
+/** Конец хода игрока → ход врага. */
+export function breachCombatEndTurn(p) {
+  const s = p.breach;
+  if (!s?.active) return { error: 'Вы не в Бреши' };
+  if (s.ui === 'victory') return { error: 'Сначала заберите победу' };
+
+  const session = cloneSession(s);
+  session.log.push(`[ХОД ${session.turn}] Конец хода.`);
+  resolveEnemyTurn(p, session);
 
   if (session.playerHp <= 0) {
-    session.log.push('[СИСТЕМА] Критическая ошибка. Сознание Игрока отключено. Лут утерян.');
-    return finishBreach({ ...p, breach: { ...session, lootPalium: 0, lootItems: {} } }, { keepLoot: false, cleared: false }, [
-      { type: 'error', text: 'Поражение в Бреши. Лут потерян.' },
+    session.log.push('[СИСТЕМА] Критическая ошибка. Лут утерян.');
+    return finishBreach(
+      { ...p, breach: { ...session, lootPalium: 0, lootItems: {}, playerHp: 0 } },
+      { keepLoot: false, cleared: false, defeated: true },
+      [{ type: 'error', text: 'Поражение в Бреши. Лут потерян. HP: 1' }],
+    );
+  }
+  const max = playerMaxHp(p);
+  return { player: { ...withHp(p, session.playerHp, max), breach: session }, events: [] };
+}
+
+/** После окна победы: следующий враг или выход с лутом. */
+export function breachCombatContinue(p) {
+  const s = p.breach;
+  if (!s?.active || s.ui !== 'victory') return { error: 'Нет победы для продолжения' };
+  const session = cloneSession(s);
+  const final = session.victory?.final;
+
+  if (final) {
+    session.log.push(`[СИСТЕМА] Все ${session.enemies.length} угроз нейтрализованы.`);
+    return finishBreach({ ...p, breach: session }, { keepLoot: true, cleared: true }, [
+      { type: 'level', text: `Брешь «${session.name}» зачищена!` },
     ]);
   }
 
+  session.room += 1;
+  session.enemy = session.enemies[session.room];
+  session.enemyIntent = makeEnemyIntent(session.enemy);
+  session.enemyArmorBuff = 0;
+  session.ui = 'fight';
+  session.phase = 'player';
+  session.victory = null;
+  session.combatAp = COMBAT_AP_MAX;
+  session.defendAbsorb = 0;
+  session.stanceReduce = 0;
+  session.log.push(
+    `[СИСТЕМА] Следующая цель ${session.room + 1}/${session.enemies.length}: ${session.enemy.emoji} ${session.enemy.name} · Ур.${session.enemy.level}`,
+  );
+  session.log.push(
+    `[СИСТЕМА] Намерение: ${session.enemyIntent.icon} ${session.enemyIntent.label}${session.enemyIntent.damage != null ? ` (${session.enemyIntent.damage})` : ''}`,
+  );
   return { player: { ...p, breach: session }, events: [] };
+}
+
+/** Совместимость: старая кнопка «Атаковать». */
+export function breachAttack(p) {
+  return breachCombatStrike(p);
 }
 
 /** Выход: забираете уже полученный лут, Брешь закрывается. */
@@ -452,19 +682,22 @@ export function breachFlee(p) {
     ...p.breach,
     log: [...p.breach.log, '[СИСТЕМА] Экстренный выход. Накопленный лут сохранён. Брешь закрыта.'],
   };
-  return finishBreach({ ...p, breach: session }, { keepLoot: true, cleared: false }, [
+  const max = playerMaxHp(p);
+  const hpLeft = Math.max(0, session.playerHp ?? 0);
+  return finishBreach({ ...p, breach: session }, { keepLoot: true, cleared: false, defeated: false }, [
     {
       type: 'gain',
-      text: `Выход из Бреши · лут сохранён (+${formatPalium(session.lootPalium)} Палиум)`,
+      text: `Выход из Бреши · HP ${hpLeft}/${max} · лут +${formatPalium(session.lootPalium)} Палиум`,
     },
   ]);
 }
 
-function finishBreach(p, { keepLoot, cleared }, events) {
+function finishBreach(p, { keepLoot, cleared, defeated = false }, events) {
   const session = p.breach;
   let inv = { ...(p.inventory ?? emptyInventory()) };
   const lootPalium = keepLoot ? session.lootPalium : 0;
   const lootItems = keepLoot ? session.lootItems : {};
+  const max = playerMaxHp(p);
 
   for (const [id, n] of Object.entries(lootItems)) {
     inv[id] = (inv[id] ?? 0) + n;
@@ -472,22 +705,35 @@ function finishBreach(p, { keepLoot, cleared }, events) {
     events.push({ type: 'title', text: `Лут: ${item?.name ?? id} ×${n}` });
   }
 
-  const next = {
-    ...p,
-    palium: addPalium(p.palium, lootPalium),
-    inventory: inv,
-    breach: null,
-    world: {
-      ...(p.world ?? {}),
-      breaches: (p.world?.breaches ?? 0) + 1,
-      breachWins: (p.world?.breachWins ?? 0) + (cleared ? 1 : 0),
+  // Смерть → 1 HP в статусе; иначе сохраняем HP из боя.
+  const outHp = defeated ? 1 : Math.max(1, Math.min(max, Math.round(session.playerHp ?? max)));
+
+  const next = withHp(
+    {
+      ...p,
+      palium: addPalium(p.palium, lootPalium),
+      inventory: inv,
+      breach: null,
+      lastHpTick: Date.now(),
+      world: {
+        ...(p.world ?? {}),
+        breaches: (p.world?.breaches ?? 0) + 1,
+        breachWins: (p.world?.breachWins ?? 0) + (cleared ? 1 : 0),
+      },
     },
-  };
+    outHp,
+    max,
+  );
 
   if (cleared) {
-    events.push({ type: 'level', text: `Брешь «${session.name}» закрыта! +${formatPalium(lootPalium)} Палиум` });
+    events.push({
+      type: 'level',
+      text: `Брешь «${session.name}» закрыта! HP ${outHp}/${max} · +${formatPalium(lootPalium)} Палиум`,
+    });
+  } else if (defeated) {
+    events.push({ type: 'error', text: `Статус: HP ${outHp}/${max}` });
   } else if (keepLoot) {
-    events.push({ type: 'energy', text: `Брешь «${session.name}» закрыта после выхода` });
+    events.push({ type: 'energy', text: `Брешь «${session.name}» закрыта · HP ${outHp}/${max}` });
   }
 
   return { player: next, events };

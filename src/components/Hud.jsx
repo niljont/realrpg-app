@@ -11,10 +11,11 @@ import {
   isMetabolism,
   isSated,
   levelFromXp,
-  maxHp,
   msUntilNextAp,
+  msUntilNextHp,
   titleName,
 } from '../lib/game';
+import { getPlayerHp, playerMaxHp } from '../lib/equipment';
 import SettingsModal from './SettingsModal';
 
 function Bar({ icon: Icon, label, value, max, from, to, glow, children, onBarClick }) {
@@ -72,9 +73,10 @@ function TipCard({ title, body, color, onClose }) {
   );
 }
 
-export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onResetAccount }) {
+export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onResetAccount, onRename }) {
   const { level, xp, need } = levelFromXp(player.xp);
-  const hp = maxHp(player);
+  const maxHpVal = player.breach?.active ? (player.breach.playerMaxHp ?? playerMaxHp(player)) : playerMaxHp(player);
+  const hpVal = player.breach?.active ? (player.breach.playerHp ?? getPlayerHp(player)) : getPlayerHp(player);
   const title = TITLES[player.activeTitle] ?? TITLES.wanderer;
   const metabolism = isMetabolism(player);
   const sated = !metabolism && isSated(player);
@@ -85,7 +87,7 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (tip?.type !== 'ap') return undefined;
+    if (tip?.type !== 'ap' && tip?.type !== 'hp') return undefined;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [tip?.type]);
@@ -93,10 +95,16 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
   const toggleTip = (next) => setTip((cur) => (cur?.id === next.id ? null : next));
 
   const apLeft = msUntilNextAp(player, now);
+  const hpLeft = msUntilNextHp(player, maxHpVal, now);
   const apTipBody =
     player.ap >= player.maxAp
       ? 'Энергия на максимуме. Пассивный реген приостановлен.'
       : `До +1 AP: ${formatDuration(apLeft)} · реген каждые 30 мин. Утром AP восстанавливается до max.`;
+  const hpTipBody = player.breach?.active
+    ? 'В Бреши HP общее со статусом. Пассивный реген снаружи боя: +1 / 15 мин.'
+    : hpVal >= maxHpVal
+      ? 'HP на максимуме. Реген приостановлен.'
+      : `До +1 HP: ${formatDuration(hpLeft)} · реген +1 каждые 15 мин. В Бреши тот же запас HP.`;
 
   return (
     <>
@@ -198,7 +206,19 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
       )}
 
       <div className="mt-2.5 space-y-1.5">
-        <Bar icon={Heart} label="HP" value={hp} max={hp} from="#7f1d1d" to="#ef4444" glow="#ef4444" />
+        <Bar
+          icon={Heart}
+          label="HP"
+          value={hpVal}
+          max={maxHpVal}
+          from="#7f1d1d"
+          to="#ef4444"
+          glow="#ef4444"
+          onBarClick={() => toggleTip({ id: 'hp', type: 'hp' })}
+        />
+        {tip?.type === 'hp' && (
+          <TipCard title="Здоровье" color="#ef4444" body={hpTipBody} onClose={() => setTip(null)} />
+        )}
         <Bar
           icon={Zap}
           label="AP"
@@ -233,9 +253,11 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
 
     {settingsOpen && (
       <SettingsModal
+        player={player}
         onClose={() => setSettingsOpen(false)}
         onSignOut={onSignOut}
         onResetAccount={onResetAccount}
+        onRename={onRename}
       />
     )}
     </>

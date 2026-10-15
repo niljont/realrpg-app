@@ -1,15 +1,20 @@
-import { createPlayer, getStats, hydratePlayer, levelFromXp, xpForNext } from './game';
+import {
+  createPlayer,
+  getStats,
+  hydratePlayer,
+  levelFromXp,
+  pointsForStatLevel,
+  xpForNext,
+} from './game';
 import { supabase } from './supabase';
+
+export { pointsForStatLevel } from './game';
 
 /** Колонки профиля без тяжёлого save_data (лидерборд / лёгкий refresh). */
 export const PROFILE_PUBLIC_COLS =
-  'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,breach_wins,updated_at';
+  'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,breach_wins,active_title,gender,updated_at';
 
-/** Минимальные очки стата для отображаемого уровня L. */
-export function pointsForStatLevel(level) {
-  const L = Math.max(1, Math.floor(Number(level) || 1));
-  return 50 * (L - 1) ** 2;
-}
+const OPTIONAL_PROFILE_COLS = ['save_data', 'breach_wins', 'active_title', 'gender'];
 
 export function totalRepsFromPlayer(p) {
   const totals = p?.totals ?? {};
@@ -56,6 +61,8 @@ export function playerToProfileRow(player, userId) {
     gold: paliumToGold(player.palium),
     total_reps: Math.round(totalRepsFromPlayer(player)),
     breach_wins: player.world?.breachWins ?? 0,
+    active_title: player.activeTitle || 'wanderer',
+    gender: player.gender === 'female' ? 'female' : 'male',
     save_data: playerToSaveData(player),
     updated_at: new Date().toISOString(),
   };
@@ -76,6 +83,8 @@ export function applyProfileToPlayer(player, profile) {
   return {
     ...player,
     name: profile.username || player.name,
+    gender: profile.gender === 'female' || profile.gender === 'male' ? profile.gender : player.gender,
+    activeTitle: profile.active_title || player.activeTitle,
     xp,
     ap: profile.current_ap ?? player.ap,
     maxAp: profile.max_ap ?? player.maxAp,
@@ -128,11 +137,22 @@ export async function fetchProfile(userId, { withSave = false } = {}) {
   return data;
 }
 
+function stripOptionalCol(row, selectCols, col) {
+  const nextRow = { ...row };
+  delete nextRow[col];
+  const nextSelect = selectCols
+    .split(',')
+    .map((c) => c.trim())
+    .filter((c) => c && c !== col)
+    .join(',');
+  return { row: nextRow, selectCols: nextSelect };
+}
+
 async function upsertRow(row) {
   let current = { ...row };
   let selectCols = PROFILE_PUBLIC_COLS;
 
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     const { data, error } = await supabase
       .from('profiles')
       .upsert(current, { onConflict: 'id' })
@@ -142,23 +162,14 @@ async function upsertRow(row) {
     if (!error) return data;
 
     const msg = error.message || '';
-    if (/save_data/i.test(msg) && 'save_data' in current) {
-      const { save_data: _sd, ...rest } = current;
-      current = rest;
-      console.warn(
-        '[СИСТЕМА] Колонка save_data отсутствует. Выполни SQL: alter table public.profiles add column if not exists save_data jsonb;',
-      );
-      continue;
-    }
-    if (/breach_wins/i.test(msg)) {
-      if ('breach_wins' in current) {
-        const { breach_wins: _bw, ...rest } = current;
-        current = rest;
+    const missing = OPTIONAL_PROFILE_COLS.find((col) => new RegExp(col, 'i').test(msg));
+    if (missing && (missing in current || selectCols.includes(missing))) {
+      if (missing === 'save_data') {
+        console.warn(
+          '[СИСТЕМА] Колонка save_data отсутствует. Выполни SQL: alter table public.profiles add column if not exists save_data jsonb;',
+        );
       }
-      selectCols = selectCols
-        .split(',')
-        .filter((c) => c.trim() !== 'breach_wins')
-        .join(',');
+      ({ row: current, selectCols } = stripOptionalCol(current, selectCols, missing));
       continue;
     }
     if (/column|does not exist|schema cache/i.test(msg)) {
@@ -181,17 +192,33 @@ export async function upsertProfile(player, userId) {
 }
 
 export async function fetchLeaderboard(limit = 100) {
-  let { data, error } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLS).limit(limit);
-  if (error && /breach_wins|column/i.test(error.message || '')) {
-    ({ data, error } = await supabase
-      .from('profiles')
-      .select(
-        'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,updated_at',
-      )
-      .limit(limit));
+  let cols = PROFILE_PUBLIC_COLS;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { data, error } = await supabase.from('profiles').select(cols).limit(limit);
+    if (!error) return data ?? [];
+
+    const msg = error.message || '';
+    const missing = OPTIONAL_PROFILE_COLS.filter((c) => c !== 'save_data').find((col) =>
+      new RegExp(col, 'i').test(msg),
+    );
+    if (missing) {
+      cols = cols
+        .split(',')
+        .map((c) => c.trim())
+        .filter((c) => c && c !== missing)
+        .join(',');
+      continue;
+    }
+    if (/column|does not exist|schema cache/i.test(msg)) {
+      const fallback =
+        'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,updated_at';
+      const { data: d2, error: e2 } = await supabase.from('profiles').select(fallback).limit(limit);
+      if (e2) throw e2;
+      return d2 ?? [];
+    }
+    throw error;
   }
-  if (error) throw error;
-  return data ?? [];
+  return [];
 }
 
 export function powerScore(row) {

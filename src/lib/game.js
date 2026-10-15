@@ -53,6 +53,7 @@ export const BASE_AP = 10;
 export const STR_PER_AP = 20;
 export const TRAINING_AP_COST = 0; // Прокачка не тратит энергию
 export const AP_REGEN_MS = 30 * 60 * 1000; // +1 AP / 30 мин
+export const HP_REGEN_MS = 15 * 60 * 1000; // +1 HP / 15 мин
 export const PUSHUPS_PER_SET = 15;
 export const PULLUPS_PER_SET = 5;
 export const AP_PER_STRENGTH_SET = 2;
@@ -233,6 +234,31 @@ export function msUntilNextAp(p, now = Date.now()) {
   return AP_REGEN_MS - mod;
 }
 
+/** Мс до следующего +1 HP (нужен maxHp снаружи — с бонусами экипировки). */
+export function msUntilNextHp(p, maxHpValue, now = Date.now()) {
+  if (!p || maxHpValue <= 0) return 0;
+  const cur = currentHp(p, maxHpValue);
+  if (cur >= maxHpValue) return 0;
+  const last = p.lastHpTick ?? now;
+  const elapsed = Math.max(0, now - last);
+  const mod = elapsed % HP_REGEN_MS;
+  if (mod === 0 && elapsed > 0) return 0;
+  return HP_REGEN_MS - mod;
+}
+
+/** Текущее HP; null/undefined = полный запас. */
+export function currentHp(p, maxHpValue) {
+  const max = Math.max(1, Math.round(maxHpValue ?? 1));
+  if (p?.hp == null) return max;
+  return Math.max(0, Math.min(max, Math.round(Number(p.hp) || 0)));
+}
+
+export function withHp(p, hp, maxHpValue) {
+  const max = Math.max(1, Math.round(maxHpValue ?? 1));
+  const next = Math.max(0, Math.min(max, Math.round(Number(hp) || 0)));
+  return { ...p, hp: next };
+}
+
 export function formatDuration(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
   const h = Math.floor(s / 3600);
@@ -240,6 +266,41 @@ export function formatDuration(ms) {
   const r = s % 60;
   if (h > 0) return `${h}ч ${String(m).padStart(2, '0')}м`;
   return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+/** Смена имени: не чаще раза в 7 дней. */
+export const NAME_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function msUntilNameChange(p, now = Date.now()) {
+  const last = Number(p?.nameChangedAt) || 0;
+  if (!last) return 0;
+  return Math.max(0, last + NAME_CHANGE_COOLDOWN_MS - now);
+}
+
+export function canChangeName(p, now = Date.now()) {
+  return msUntilNameChange(p, now) <= 0;
+}
+
+export function formatNameCooldown(ms) {
+  const total = Math.max(0, ms);
+  const days = Math.floor(total / (24 * 60 * 60 * 1000));
+  const hours = Math.ceil((total % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  if (days >= 1) return hours > 0 ? `${days} дн. ${hours} ч` : `${days} дн.`;
+  if (total >= 60 * 60 * 1000) return `${Math.max(1, Math.ceil(total / (60 * 60 * 1000)))} ч`;
+  return formatDuration(total);
+}
+
+export function renamePlayer(p, rawName, now = Date.now()) {
+  const name = String(rawName ?? '').trim();
+  if (name.length < 2) return { error: 'Имя слишком короткое (мин. 2 символа)' };
+  if (name.length > 24) return { error: 'Имя слишком длинное (макс. 24 символа)' };
+  if (name === p.name) return { error: 'Это уже ваше текущее имя' };
+  const wait = msUntilNameChange(p, now);
+  if (wait > 0) return { error: `Смена имени доступна через ${formatNameCooldown(wait)}` };
+  return {
+    player: { ...p, name, nameChangedAt: now, updatedAt: now },
+    events: [{ type: 'system', text: `Имя изменено: «${name}»` }],
+  };
 }
 
 export const BUFF_INFO = {
@@ -326,14 +387,38 @@ export const exerciseById = (id) => Object.values(EXERCISES).flat().find((e) => 
 
 export const exerciseApCost = (ex) => ex.apCost ?? TRAINING_AP_COST;
 
-// Уровень стата n требует 50·(n−1)² накопленных поинтов: 0, 50, 200, 450, 800...
-export const statLevel = (pts) => 1 + Math.floor(Math.sqrt(pts / 50));
+/** База 1→2 = 50; каждый следующий уровень +10% к предыдущему порогу (50 → 55 → 61…). */
+export const STAT_BASE_NEED = 50;
+export const STAT_NEED_GROWTH = 1.1;
+
+/** Поинты, нужные чтобы перейти с `level` на `level + 1`. */
+export function needForStatLevel(level) {
+  const L = Math.max(1, Math.floor(Number(level) || 1));
+  return Math.round(STAT_BASE_NEED * STAT_NEED_GROWTH ** (L - 1));
+}
+
+/** Минимальные накопленные поинты для отображаемого уровня L. */
+export function pointsForStatLevel(level) {
+  const L = Math.max(1, Math.floor(Number(level) || 1));
+  if (L <= 1) return 0;
+  let total = 0;
+  for (let lv = 1; lv < L; lv++) total += needForStatLevel(lv);
+  return total;
+}
+
+export function statLevel(pts) {
+  const p = Math.max(0, Number(pts) || 0);
+  let level = 1;
+  // Защита от бесконечного цикла на огромных значениях.
+  while (level < 500 && pointsForStatLevel(level + 1) <= p) level += 1;
+  return level;
+}
 
 export function statProgress(pts) {
   const level = statLevel(pts);
-  const from = 50 * (level - 1) ** 2;
-  const to = 50 * level ** 2;
-  return { level, cur: pts - from, need: to - from };
+  const from = pointsForStatLevel(level);
+  const need = needForStatLevel(level);
+  return { level, cur: Math.max(0, (Number(pts) || 0) - from), need };
 }
 
 export const getStats = (p) => Object.fromEntries(STATS.map((s) => [s, statLevel(p.statPoints[s])]));
@@ -350,6 +435,7 @@ export function levelFromXp(xp) {
   return { level, xp: rest, need: xpForNext(level) };
 }
 
+/** Базовый Max HP без экипировки (END×15 + баффы). Полный Max — playerMaxHp в equipment. */
 export const maxHp = (p) => getStats(p).END * 15 + (activeEffect(p).hp ?? 0);
 
 export const maxApReq = (maxAp) => Math.round(50 * 1.1 ** (maxAp - BASE_AP));
@@ -393,6 +479,7 @@ const EMPTY_INV = {
   cheatmeal_scroll: 0,
   focus_elixir: 0,
   recovery_rune: 0,
+  health_potion: 0,
   dish_grilled_fish: 0,
   dish_herb_fish: 0,
   dish_fish_stew: 0,
@@ -413,6 +500,8 @@ export function createPlayer(name, gender) {
     strBuffer: 0,
     endProgress: 0,
     lastApTick: now,
+    lastHpTick: now,
+    hp: null,
     lastDailyReset: dayKey(now),
     palium: 0,
     inscriptionXp: 0,
@@ -423,6 +512,23 @@ export function createPlayer(name, gender) {
     totals: {},
     buffs: {},
     inventory: { ...EMPTY_INV },
+    equipment: {
+      mainHand: null,
+      offHand: null,
+      head: null,
+      neck: null,
+      shoulders: null,
+      chest: null,
+      wrists: null,
+      hands: null,
+      waist: null,
+      legs: null,
+      feet: null,
+      finger1: null,
+      finger2: null,
+      trinket1: null,
+      trinket2: null,
+    },
     nodeCooldowns: {},
     cookCounts: {},
     steps: { date: dayKey(now), today: 0, bank: 0 },
@@ -459,12 +565,32 @@ export function hydratePlayer(p) {
     achievements: p.achievements ?? [],
     buffs: p.buffs ?? {},
     inventory: { ...EMPTY_INV, ...(p.inventory ?? {}) },
+    equipment: {
+      mainHand: null,
+      offHand: null,
+      head: null,
+      neck: null,
+      shoulders: null,
+      chest: null,
+      wrists: null,
+      hands: null,
+      waist: null,
+      legs: null,
+      feet: null,
+      finger1: null,
+      finger2: null,
+      trinket1: null,
+      trinket2: null,
+      ...(p.equipment ?? {}),
+    },
     nodeCooldowns: p.nodeCooldowns ?? {},
     cookCounts: p.cookCounts ?? {},
     customRecipes: p.customRecipes ?? [],
     cookingSkill: p.cookingSkill ?? 0,
     inscriptionXp: p.inscriptionXp ?? 0,
     lastApTick: p.lastApTick ?? Date.now(),
+    lastHpTick: p.lastHpTick ?? Date.now(),
+    hp: p.hp == null ? null : Math.max(0, Math.round(Number(p.hp) || 0)),
     lastDailyReset: p.lastDailyReset ?? '',
     steps: p.steps ?? { date: '', today: 0, bank: 0 },
     radar: p.radar ?? null,
@@ -481,6 +607,7 @@ export function hydratePlayer(p) {
     },
     totals,
     updatedAt: Number(p.updatedAt) || 0,
+    nameChangedAt: Number(p.nameChangedAt) || 0,
     version: 7,
   };
   delete next.copper;

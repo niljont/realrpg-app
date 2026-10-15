@@ -139,6 +139,60 @@ body {
   }
 }
 
+.shop-buy-flash {
+  animation: shop-buy-flash 0.65s ease-out;
+}
+@keyframes shop-buy-flash {
+  0%,
+  100% {
+    filter: brightness(1);
+    box-shadow: none;
+  }
+  20% {
+    filter: brightness(1.35);
+    box-shadow: 0 0 18px rgb(52 211 153 / 0.7);
+    background-color: #34d399 !important;
+  }
+  45% {
+    filter: brightness(1.1);
+    background-color: #10b981 !important;
+  }
+  70% {
+    filter: brightness(1.3);
+    box-shadow: 0 0 14px rgb(52 211 153 / 0.55);
+    background-color: #6ee7b7 !important;
+  }
+}
+
+.shop-palium-spend {
+  animation: shop-palium-spend 0.9s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes shop-palium-spend {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px) scale(1.05);
+  }
+}
+
+.shop-balance-pulse {
+  animation: shop-balance-pulse 0.55s ease-out;
+}
+@keyframes shop-balance-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.08);
+    color: #f87171;
+  }
+}
+
 .unlock-card {
   animation: unlock-card 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.15);
 }

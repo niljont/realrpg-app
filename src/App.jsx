@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BarChart3, Dumbbell, Hammer, Map, Medal, Trophy, UserRound } from 'lucide-react';
+import { Dumbbell, Hammer, Map, Medal, UserRound } from 'lucide-react';
 import AuthScreen from './components/AuthScreen';
 import Hud from './components/Hud';
 import EnergyModal from './components/EnergyModal';
 import StatusScreen from './components/StatusScreen';
 import TrainingScreen from './components/TrainingScreen';
-import AnalyticsScreen from './components/AnalyticsScreen';
-import AchievementsScreen from './components/AchievementsScreen';
 import WorldScreen from './components/WorldScreen';
 import ProfessionsScreen from './components/ProfessionsScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
@@ -18,6 +16,7 @@ import {
   createPlayer,
   equipTitle,
   loadPlayer,
+  renamePlayer,
   savePlayer,
   sealResult,
   stampPlayer,
@@ -26,10 +25,10 @@ import {
   fetchProfile,
   resolvePlayerBootstrap,
 } from './lib/profileSync';
+import { supabase } from './lib/supabase';
 import {
   addCustomRecipe,
   archiveCustomRecipe,
-  buyFromGoblin,
   cookCustomRecipe,
   craftCheatmealScroll,
   editCustomRecipe,
@@ -38,12 +37,18 @@ import {
   logFastFood,
   logHealthyMeal,
   logNormalMeal,
+  buyFromGoblin,
   sellToGoblin,
   studyLanguage,
   useInventoryItem,
 } from './lib/world';
+import { applyHpRegen, buyGear, equipItem, unequipSlot } from './lib/equipment';
 import {
-  breachAttack,
+  breachCombatContinue,
+  breachCombatDefend,
+  breachCombatEndTurn,
+  breachCombatStrike,
+  breachCombatTrinket,
   breachFlee,
   ensureRadar,
   enterBreach,
@@ -52,12 +57,19 @@ import {
   travelToBreach,
 } from './lib/breaches';
 
-/** AP-regen + утренний сброс + банк шагов + радар раз в час. */
+/** AP/HP-regen + утренний сброс + банк шагов + радар раз в час. */
 function applyWorldSystems(p) {
   let result = applyTimeSystems(p);
   let player = result.player;
   let events = [...(result.events ?? [])];
   let changed = result.changed;
+
+  const hpRegen = applyHpRegen(player);
+  if (hpRegen.changed) {
+    player = hpRegen.player;
+    events.push(...(hpRegen.events ?? []));
+    changed = true;
+  }
 
   const steps = syncStepsDay(player);
   if (steps.changed) {
@@ -78,9 +90,7 @@ const TABS = [
   { id: 'training', label: 'Прокачка', Icon: Dumbbell },
   { id: 'world', label: 'Мир', Icon: Map },
   { id: 'professions', label: 'Профы', Icon: Hammer },
-  { id: 'titles', label: 'Титулы', Icon: Trophy },
   { id: 'rank', label: 'Рейтинг', Icon: Medal },
-  { id: 'analytics', label: 'Графики', Icon: BarChart3 },
 ];
 
 const TOAST_COLORS = {
@@ -98,7 +108,7 @@ export default function App() {
   const [player, setPlayer] = useState(null);
   const [bootstrapping, setBootstrapping] = useState(false);
   const [tab, setTab] = useState('status');
-  const [titlesSubTab, setTitlesSubTab] = useState('titles');
+  const [statusOpenRequest, setStatusOpenRequest] = useState(null);
   const [modal, setModal] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [unlockId, setUnlockId] = useState(null);
@@ -114,8 +124,8 @@ export default function App() {
     if (firstUnlock) {
       setUnlockId(firstUnlock.id);
       setJustUnlocked(firstUnlock.id);
-      setTab('titles');
-      setTitlesSubTab('achievements');
+      setTab('status');
+      setStatusOpenRequest('achievements');
     }
   }, []);
 
@@ -276,14 +286,37 @@ export default function App() {
           player={player}
           onOpenEnergy={() => setModal('energy')}
           onOpenTitles={() => {
-            setTitlesSubTab('titles');
-            setTab('titles');
+            setTab('status');
+            setStatusOpenRequest('titles');
           }}
           onSignOut={handleSignOut}
           onResetAccount={async () => {
             const fresh = createPlayer(player.name, player.gender || 'male');
             setPlayer(fresh);
             await syncPlayerToCloud(stampPlayer(fresh));
+          }}
+          onRename={async (newName) => {
+            const result = renamePlayer(player, newName);
+            if (result.error) return { error: result.error };
+            const next = stampPlayer(result.player);
+            setPlayer(next);
+            notify(result.events ?? []);
+            const sync = await syncPlayerToCloud(next);
+            if (sync && sync.ok === false) {
+              return { error: sync.error || 'Не удалось сохранить имя в облаке' };
+            }
+            try {
+              await supabase.auth.updateUser({
+                data: {
+                  username: next.name,
+                  display_name: next.name,
+                  full_name: next.name,
+                },
+              });
+            } catch {
+              /* ignore metadata */
+            }
+            return { ok: true };
           }}
         />
 
@@ -297,7 +330,14 @@ export default function App() {
               onNormalMeal={() => run(logNormalMeal)}
               onFastFood={() => run(logFastFood)}
               onSell={(id, amt) => run(sellToGoblin, id, amt)}
-              onBuy={(id) => run(buyFromGoblin, id)}
+              onBuyGear={(id) => run(buyGear, id)}
+              onBuyConsumable={(id) => run(buyFromGoblin, id)}
+              onEquipItem={(id, slot) => run(equipItem, id, slot)}
+              onUnequipSlot={(slot) => run(unequipSlot, slot)}
+              onEquipTitle={(id) => commit(equipTitle(player, id))}
+              justUnlocked={justUnlocked}
+              openRequest={statusOpenRequest}
+              onOpenRequestHandled={() => setStatusOpenRequest(null)}
             />
           )}
           {tab === 'training' && (
@@ -310,7 +350,11 @@ export default function App() {
               onSetSteps={(n) => run(setTodaySteps, n)}
               onTravel={(id) => run(travelToBreach, id)}
               onEnterBreach={(id) => run(enterBreach, id)}
-              onBreachAttack={() => run(breachAttack)}
+              onBreachStrike={() => run(breachCombatStrike)}
+              onBreachDefend={() => run(breachCombatDefend)}
+              onBreachEndTurn={() => run(breachCombatEndTurn)}
+              onBreachTrinket={() => run(breachCombatTrinket)}
+              onBreachContinue={() => run(breachCombatContinue)}
               onBreachFlee={() => run(breachFlee)}
               onRefreshRadar={refreshRadar}
             />
@@ -326,17 +370,7 @@ export default function App() {
               onCraftScroll={() => run(craftCheatmealScroll)}
             />
           )}
-          {tab === 'titles' && (
-            <AchievementsScreen
-              key={titlesSubTab}
-              player={player}
-              initialTab={titlesSubTab}
-              justUnlocked={justUnlocked}
-              onEquip={(id) => commit(equipTitle(player, id))}
-            />
-          )}
           {tab === 'rank' && <LeaderboardScreen player={player} />}
-          {tab === 'analytics' && <AnalyticsScreen player={player} />}
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-neon/20 bg-void/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
@@ -346,10 +380,7 @@ export default function App() {
               return (
                 <button
                   key={id}
-                  onClick={() => {
-                    if (id === 'titles') setTitlesSubTab('titles');
-                    setTab(id);
-                  }}
+                  onClick={() => setTab(id)}
                   className={`flex min-w-[3.25rem] flex-1 flex-col items-center gap-0.5 py-2 text-[8px] font-bold tracking-wider transition ${active ? 'text-neon' : 'text-zinc-500'}`}
                 >
                   <Icon size={16} style={{ filter: active ? 'drop-shadow(0 0 6px #22d3ee)' : 'none' }} />

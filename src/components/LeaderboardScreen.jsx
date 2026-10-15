@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Medal, RefreshCw, Trophy } from 'lucide-react';
 import { fetchLeaderboard, powerScore, sortLeaderboard } from '../lib/profileSync';
-import { STAT_META, formatPalium, stampPlayer } from '../lib/game';
+import { STAT_META, TITLES, formatPalium, stampPlayer, titleName } from '../lib/game';
 import { useAuth } from '../context/AuthContext';
+
+function rowTitle(row) {
+  const id = row.active_title && TITLES[row.active_title] ? row.active_title : null;
+  if (!id) return null;
+  const gender = row.gender === 'female' ? 'female' : 'male';
+  return {
+    label: titleName(id, gender),
+    color: TITLES[id].color,
+  };
+}
 
 function rankColor(i) {
   if (i === 0) return '#eab308';
@@ -186,6 +196,7 @@ export default function LeaderboardScreen({ player }) {
             {sorted.map((row, i) => {
               const mine = user?.id === row.id;
               const color = rankColor(i);
+              const title = rowTitle(row);
               return (
                 <div
                   key={row.id}
@@ -201,9 +212,17 @@ export default function LeaderboardScreen({ player }) {
                       {i < 3 ? <Medal size={16} /> : `#${i + 1}`}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-display text-sm text-zinc-100">
-                        {row.username}
-                        {mine && <span className="ml-1.5 text-[10px] font-bold text-neon">ВЫ</span>}
+                      <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        <span className="truncate font-display text-sm text-zinc-100">{row.username}</span>
+                        {title && (
+                          <span
+                            className="truncate text-[10px] font-bold tracking-wide"
+                            style={{ color: title.color }}
+                          >
+                            «{title.label}»
+                          </span>
+                        )}
+                        {mine && <span className="text-[10px] font-bold text-neon">ВЫ</span>}
                       </div>
                       <div className="mt-0.5 text-[10px] text-zinc-500">
                         STR {row.strength} · END {row.endurance} · AGI {row.agility} · INT {row.intelligence} · WIL{' '}

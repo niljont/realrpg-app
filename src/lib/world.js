@@ -7,23 +7,79 @@ import {
   formatPalium,
   levelFromXp,
 } from './game';
+import { GEAR_ITEMS, healPlayer, sellInventoryItem as sellWeaponItem } from './equipment';
 
 /* ---------- предметы ---------- */
 
-export const ITEMS = {
-  copper_ore: { id: 'copper_ore', name: 'Медная руда', emoji: '🪨', color: '#b45309', desc: 'Продаётся гоблину', category: 'resource' },
-  wood: { id: 'wood', name: 'Древесина', emoji: '🪵', color: '#a16207', desc: 'Продаётся гоблину / крафт', category: 'resource' },
-  wild_herbs: { id: 'wild_herbs', name: 'Дикие травы', emoji: '🌿', color: '#22c55e', desc: 'Сырьё Начертания и кухни', category: 'resource' },
-  raw_fish: { id: 'raw_fish', name: 'Сырая рыба', emoji: '🐟', color: '#38bdf8', desc: 'Ингредиент Кулинарии', category: 'resource' },
-  magic_ink: { id: 'magic_ink', name: 'Магические Чернила', emoji: '🖋️', color: '#a855f7', desc: '15 мин языка → +1 чернило', category: 'craft' },
-  cheatmeal_scroll: { id: 'cheatmeal_scroll', name: 'Свиток Читмила', emoji: '📜', color: '#eab308', desc: 'Сжигает штраф за фастфуд', category: 'scroll', usable: true },
-  focus_elixir: { id: 'focus_elixir', name: 'Эликсир Фокуса', emoji: '🧪', color: '#3b82f6', desc: '+10% XP на 2 часа', category: 'consumable', usable: true },
-  recovery_rune: { id: 'recovery_rune', name: 'Руна Восстановления', emoji: '🔷', color: '#22d3ee', desc: 'Восстанавливает 5 AP', category: 'consumable', usable: true },
-  dish_grilled_fish: { id: 'dish_grilled_fish', name: 'Жареная рыба', emoji: '🍳', color: '#f97316', desc: 'Здоровая еда · Оптимизация метаболизма +15% урон/XP на 8ч', category: 'food', food: 'useful', usable: true },
-  dish_herb_fish: { id: 'dish_herb_fish', name: 'Рыба на травах', emoji: '🍲', color: '#f97316', desc: 'Здоровая еда · Оптимизация метаболизма +15% урон/XP на 8ч', category: 'food', food: 'useful', usable: true },
-  dish_fish_stew: { id: 'dish_fish_stew', name: 'Уха Системы', emoji: '🍜', color: '#ef4444', desc: 'Здоровая еда · Оптимизация метаболизма +15% урон/XP на 8ч', category: 'food', food: 'useful', usable: true },
-  dish_herb_broth: { id: 'dish_herb_broth', name: 'Отвар трав', emoji: '🍵', color: '#22c55e', desc: 'Здоровая еда · Оптимизация метаболизма +15% урон/XP на 8ч', category: 'food', food: 'useful', usable: true },
+const BASE_ITEMS = {
+  copper_ore: {
+    id: 'copper_ore',
+    name: 'Медная руда',
+    emoji: '🪨',
+    color: '#b45309',
+    desc: 'Продаётся из инвентаря',
+    category: 'resource',
+    sellPrice: 0.008,
+  },
+  wood: {
+    id: 'wood',
+    name: 'Древесина',
+    emoji: '🪵',
+    color: '#a16207',
+    desc: 'Продаётся из инвентаря / крафт',
+    category: 'resource',
+    sellPrice: 0.005,
+  },
+  wild_herbs: { id: 'wild_herbs', name: 'Дикие травы', emoji: '🌿', color: '#22c55e', desc: 'Сырьё Начертания и кухни', category: 'resource', sellPrice: 0.004 },
+  raw_fish: { id: 'raw_fish', name: 'Сырая рыба', emoji: '🐟', color: '#38bdf8', desc: 'Ингредиент Кулинарии', category: 'resource', sellPrice: 0.006 },
+  magic_ink: { id: 'magic_ink', name: 'Магические Чернила', emoji: '🖋️', color: '#a855f7', desc: '15 мин языка → +1 чернило', category: 'craft', sellPrice: 0.01 },
+  cheatmeal_scroll: {
+    id: 'cheatmeal_scroll',
+    name: 'Свиток Читмила',
+    emoji: '📜',
+    color: '#eab308',
+    desc: 'Используй из инвентаря: снимает Зашлакованность или готовит защиту на следующий срыв (фастфуд без штрафа).',
+    category: 'scroll',
+    usable: true,
+    sellPrice: 0.2,
+  },
+  focus_elixir: {
+    id: 'focus_elixir',
+    name: 'Эликсир Фокуса',
+    emoji: '🧪',
+    color: '#3b82f6',
+    desc: '+10% XP на 2 часа',
+    category: 'consumable',
+    usable: true,
+    sellPrice: 0.08,
+  },
+  recovery_rune: {
+    id: 'recovery_rune',
+    name: 'Камень Энергии',
+    emoji: '💎',
+    color: '#22d3ee',
+    desc: 'Восстанавливает 5 AP',
+    category: 'consumable',
+    usable: true,
+    sellPrice: 0.1,
+  },
+  health_potion: {
+    id: 'health_potion',
+    name: 'Зелье лечения',
+    emoji: '❤️',
+    color: '#ef4444',
+    desc: 'Восстанавливает 25 HP',
+    category: 'consumable',
+    usable: true,
+    sellPrice: 0.012,
+  },
+  dish_grilled_fish: { id: 'dish_grilled_fish', name: 'Жареная рыба', emoji: '🍳', color: '#f97316', desc: 'Здоровая еда · Оптимизация метаболизма +15% урон/XP на 8ч', category: 'food', food: 'useful', usable: true, sellPrice: 0.01 },
+  dish_herb_fish: { id: 'dish_herb_fish', name: 'Рыба на травах', emoji: '🍲', color: '#f97316', desc: 'Здоровая еда · Оптимизация метаболизма +15% урон/XP на 8ч', category: 'food', food: 'useful', usable: true, sellPrice: 0.012 },
+  dish_fish_stew: { id: 'dish_fish_stew', name: 'Уха Системы', emoji: '🍜', color: '#ef4444', desc: 'Здоровая еда · Оптимизация метаболизма +15% урон/XP на 8ч', category: 'food', food: 'useful', usable: true, sellPrice: 0.014 },
+  dish_herb_broth: { id: 'dish_herb_broth', name: 'Отвар трав', emoji: '🍵', color: '#22c55e', desc: 'Здоровая еда · Оптимизация метаболизма +15% урон/XP на 8ч', category: 'food', food: 'useful', usable: true, sellPrice: 0.008 },
 };
+
+export const ITEMS = { ...BASE_ITEMS, ...GEAR_ITEMS };
 
 export const emptyInventory = () => Object.fromEntries(Object.keys(ITEMS).map((id) => [id, 0]));
 
@@ -330,15 +386,20 @@ export function logNormalMeal(p) {
 
 export function logFastFood(p) {
   const now = Date.now();
-  const hasScroll = invCount(p, 'cheatmeal_scroll') > 0;
-  if (hasScroll) {
+  const protectedByScroll = Boolean(p.buffs?.cheatmealReady);
+  if (protectedByScroll) {
+    const { cheatmealReady: _ready, ...restBuffs } = p.buffs ?? {};
     return {
       player: {
         ...p,
-        inventory: spendItems(p.inventory ?? emptyInventory(), { cheatmeal_scroll: 1 }),
-        world: { ...(p.world ?? {}), fastFood: (p.world?.fastFood ?? 0) + 1, scrollsUsed: (p.world?.scrollsUsed ?? 0) + 1 },
+        buffs: restBuffs,
+        world: {
+          ...(p.world ?? {}),
+          fastFood: (p.world?.fastFood ?? 0) + 1,
+          scrollsUsed: (p.world?.scrollsUsed ?? 0) + 1,
+        },
       },
-      events: [{ type: 'title', text: 'Фастфуд / Срыв: Свиток Читмила сгорел — без штрафа' }],
+      events: [{ type: 'title', text: 'Фастфуд / Срыв: защита Свитка Читмила — без штрафа' }],
     };
   }
   return {
@@ -398,10 +459,53 @@ export function useInventoryItem(p, itemId) {
         ap: p.ap + gain,
         inventory: spendItems(p.inventory ?? emptyInventory(), { recovery_rune: 1 }),
       },
-      events: [{ type: 'energy', text: `Руна Восстановления: +${gain} AP` }],
+      events: [{ type: 'energy', text: `Камень Энергии: +${gain} AP` }],
     };
   }
-  if (itemId === 'cheatmeal_scroll') return { error: 'Свиток срабатывает при записи фастфуда' };
+  if (itemId === 'health_potion') {
+    if (invCount(p, itemId) < 1) return { error: 'Нет зелья' };
+    const healed = healPlayer(p, 25);
+    if (healed.error) return healed;
+    return {
+      player: {
+        ...healed.player,
+        inventory: spendItems(healed.player.inventory ?? emptyInventory(), { health_potion: 1 }),
+      },
+      events: [{ type: 'energy', text: `Зелье лечения: +${healed.gain} HP` }],
+    };
+  }
+  if (itemId === 'cheatmeal_scroll') {
+    if (invCount(p, itemId) < 1) return { error: 'Нет свитка' };
+    const now = Date.now();
+    const clogged = (p.buffs?.clogUntil ?? 0) > now || (p.buffs?.foodComaUntil ?? 0) > now;
+    if (clogged) {
+      return {
+        player: {
+          ...p,
+          inventory: spendItems(p.inventory ?? emptyInventory(), { cheatmeal_scroll: 1 }),
+          buffs: {
+            ...p.buffs,
+            clogUntil: 0,
+            foodComaUntil: 0,
+            cheatmealReady: false,
+          },
+          world: { ...(p.world ?? {}), scrollsUsed: (p.world?.scrollsUsed ?? 0) + 1 },
+        },
+        events: [{ type: 'title', text: 'Свиток Читмила: Зашлакованность снята' }],
+      };
+    }
+    if (p.buffs?.cheatmealReady) {
+      return { error: 'Защита свитка уже активна — запиши срыв, чтобы её потратить' };
+    }
+    return {
+      player: {
+        ...p,
+        inventory: spendItems(p.inventory ?? emptyInventory(), { cheatmeal_scroll: 1 }),
+        buffs: { ...p.buffs, cheatmealReady: true },
+      },
+      events: [{ type: 'title', text: 'Свиток Читмила активирован: следующий срыв без штрафа' }],
+    };
+  }
   return { error: 'Предмет нельзя использовать' };
 }
 
@@ -416,15 +520,20 @@ export const SHOP_SELL = [
 export const SHOP_BUY = [
   { item: 'cheatmeal_scroll', price: 0.8, name: 'Свиток Читмила', priceLabel: '0.800 Палиум' },
   { item: 'focus_elixir', price: 0.25, name: 'Эликсир Фокуса', priceLabel: '0.250 Палиум' },
-  { item: 'recovery_rune', price: 0.35, name: 'Руна Восстановления', priceLabel: '0.350 Палиум' },
+  { item: 'recovery_rune', price: 0.35, name: 'Камень Энергии', priceLabel: '0.350 Палиум' },
+  { item: 'health_potion', price: 0.04, name: 'Зелье лечения', priceLabel: '0.040 Палиум' },
 ];
 
 export function sellToGoblin(p, itemId, amount = 1) {
-  const offer = SHOP_SELL.find((s) => s.item === itemId);
-  if (!offer) return { error: 'Гоблин это не покупает' };
+  const weaponSell = sellWeaponItem(p, itemId, amount);
+  if (weaponSell.error !== 'not_weapon') return weaponSell;
+
+  const item = ITEMS[itemId];
+  const unit = item?.sellPrice ?? SHOP_SELL.find((s) => s.item === itemId)?.price;
+  if (unit == null) return { error: 'Этот предмет нельзя продать' };
   const n = Math.max(1, Math.floor(Number(amount) || 0));
-  if (invCount(p, itemId) < n) return { error: 'Недостаточно ресурсов' };
-  const gain = p3(offer.price * n);
+  if (invCount(p, itemId) < n) return { error: 'Недостаточно предметов' };
+  const gain = p3(unit * n);
   return {
     player: {
       ...p,
@@ -432,7 +541,7 @@ export function sellToGoblin(p, itemId, amount = 1) {
       inventory: spendItems(p.inventory ?? emptyInventory(), { [itemId]: n }),
       world: { ...(p.world ?? {}), sold: (p.world?.sold ?? 0) + n },
     },
-    events: [{ type: 'gain', text: `Гоблин купил ${n}× ${ITEMS[itemId].name} за ${formatMoney(gain)}` }],
+    events: [{ type: 'gain', text: `Продано: ${n}× ${item.name} за ${formatMoney(gain)}` }],
   };
 }
 
@@ -442,6 +551,9 @@ export function buyFromGoblin(p, itemId) {
   if ((p.palium ?? 0) + 1e-9 < offer.price) {
     return { error: `Нужно ${offer.priceLabel} (у вас ${formatMoney(p.palium)})` };
   }
+  const have = invCount(p, itemId) > 0;
+  const used = Object.values(p.inventory ?? {}).filter((n) => Number(n) > 0).length;
+  if (!have && used >= 32) return { error: 'Инвентарь полон' };
   return {
     player: {
       ...p,

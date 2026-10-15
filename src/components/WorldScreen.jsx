@@ -5,7 +5,9 @@ import {
   BREACH_RANKS,
   formatSteps,
   msUntilRadarRefresh,
+  rankLevelHint,
 } from '../lib/breaches';
+import { attackApCost, getGearBonuses } from '../lib/equipment';
 import { ITEMS, WORLD_NODES, formatCooldown, nodeCooldownLeft } from '../lib/world';
 
 function Segmented({ value, onChange, options }) {
@@ -148,7 +150,16 @@ function BreachCard({ breach, bank, ap, onTravel, onEnter, selected, onSelect })
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-display text-sm text-zinc-100">{breach.name}</div>
-          <div className="mt-0.5 text-[10px] text-zinc-500">{breach.distanceKm} км · азимут {Math.round((breach.angle * 180) / Math.PI)}°</div>
+          <div className="mt-0.5 text-[10px] text-zinc-500">
+            Дистанция: {Number(breach.distanceKm).toFixed(1)} км (Требуется шагов:{' '}
+            {formatSteps(breach.stepsCost)})
+          </div>
+          <div className="mt-0.5 text-[10px] text-zinc-600">
+            Азимут {Math.round((breach.angle * 180) / Math.PI)}°
+          </div>
+          <div className="mt-0.5 text-[10px] font-bold" style={{ color: def.color }}>
+            {rankLevelHint(breach.rank)}
+          </div>
         </div>
         <span className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold" style={{ borderColor: def.color, color: def.color }}>
           {def.label}
@@ -191,23 +202,71 @@ function BreachCard({ breach, bank, ap, onTravel, onEnter, selected, onSelect })
   );
 }
 
-function BreachCombat({ player, onAttack, onFlee }) {
+function BreachCombat({
+  player,
+  onStrike,
+  onDefend,
+  onEndTurn,
+  onTrinket,
+  onContinue,
+  onFlee,
+}) {
   const s = player.breach;
   const def = BREACH_RANKS[s.rank] ?? BREACH_RANKS.F;
   const enemy = s.enemy;
   const total = s.enemies?.length ?? 1;
   const room = (s.room ?? 0) + 1;
+  const intent = s.enemyIntent;
+  const ap = s.combatAp ?? 0;
+  const gear = getGearBonuses(player);
+  const strikeCost = attackApCost(player);
+  const showTrinket = Boolean(gear.trinketShield) && onTrinket;
+
+  if (s.ui === 'victory' && s.victory) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-5 text-center">
+          <div className="font-display text-sm tracking-widest text-amber-300">ПОБЕДА</div>
+          <div className="mt-2 text-lg text-zinc-100">{s.victory.name}</div>
+          <div className="mt-1 text-sm text-sky-300">+{formatPalium(s.victory.gain)} Палиум</div>
+          <div className="mt-1 text-[11px] text-zinc-500">Всего лута: {formatPalium(s.lootPalium)} Палиум</div>
+          <button
+            type="button"
+            onClick={onContinue}
+            className="mt-4 w-full rounded-xl py-3 text-sm font-bold text-white"
+            style={{ background: def.color }}
+          >
+            {s.victory.final ? 'Забрать лут и выйти' : 'Следующий враг'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
       <div className="text-center font-display text-xs tracking-widest" style={{ color: def.color }}>
         БРЕШЬ · {def.label} · ВРАГ {room}/{total}
-        {enemy.boss ? ' · ХОЗЯИН' : ''}
+        {enemy.boss ? ' · ХОЗЯИН' : ''} · ХОД {s.turn}
       </div>
       <div className="text-center text-[10px] text-zinc-500">{s.name}</div>
+
       <div className="rounded-xl border bg-zinc-900/80 p-4 text-center" style={{ borderColor: `${def.color}66` }}>
+        {intent && (
+          <div className="mb-2 rounded-lg border border-zinc-700 bg-black/40 px-2 py-1.5 text-[11px] font-bold text-zinc-200">
+            Намерение: {intent.icon} {intent.label}
+            {intent.damage != null ? ` · ${intent.damage} урона` : ''}
+            {intent.armor != null ? ` · +${intent.armor} броня` : ''}
+          </div>
+        )}
         <div className="text-4xl">{enemy.emoji}</div>
         <div className="mt-1 font-display text-lg text-zinc-100">{enemy.name}</div>
+        {enemy.level != null && (
+          <div className="mt-0.5 text-[11px] font-bold" style={{ color: def.color }}>
+            Ур. {enemy.level} · ATK {enemy.atk}
+            {(s.enemyArmorBuff ?? 0) > 0 ? ` · броня +${s.enemyArmorBuff}` : ''}
+          </div>
+        )}
         <div className="mt-2 h-3 overflow-hidden rounded-sm border border-zinc-800 bg-zinc-950">
           <div className="h-full transition-all" style={{ width: `${(enemy.hp / enemy.maxHp) * 100}%`, background: def.color }} />
         </div>
@@ -215,9 +274,10 @@ function BreachCombat({ player, onAttack, onFlee }) {
           HP {enemy.hp}/{enemy.maxHp}
         </div>
       </div>
+
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
         <div className="mb-1 flex justify-between text-[11px] text-zinc-400">
-          <span>HP Игрока</span>
+          <span>HP</span>
           <span>
             {s.playerHp}/{s.playerMaxHp}
           </span>
@@ -225,17 +285,73 @@ function BreachCombat({ player, onAttack, onFlee }) {
         <div className="h-3 overflow-hidden rounded-sm bg-zinc-950">
           <div className="h-full bg-gradient-to-r from-rose-900 to-rose-500" style={{ width: `${(s.playerHp / s.playerMaxHp) * 100}%` }} />
         </div>
-        <div className="mt-2 text-[10px] text-sky-400">Лут: {formatPalium(s.lootPalium ?? 0)} Палиум · при выходе сохраняется</div>
+        {(s.playerMaxShield ?? 0) > 0 && (
+          <>
+            <div className="mt-2 mb-1 flex justify-between text-[11px] text-sky-400">
+              <span>Щит</span>
+              <span>
+                {s.playerShield ?? 0}/{s.playerMaxShield}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-sm bg-zinc-950">
+              <div
+                className="h-full bg-sky-500"
+                style={{ width: `${Math.min(100, ((s.playerShield ?? 0) / Math.max(1, s.playerMaxShield)) * 100)}%` }}
+              />
+            </div>
+          </>
+        )}
+        <div className="mt-2 flex justify-between text-[11px]">
+          <span className="font-bold text-neon">Combat AP: {ap}/3</span>
+          <span className="text-sky-400">Лут {formatPalium(s.lootPalium ?? 0)} P</span>
+        </div>
       </div>
-      <div className="flex gap-2">
-        <button onClick={onAttack} className="flex-1 rounded-xl py-3 text-xs font-bold text-white" style={{ background: def.color, boxShadow: `0 0 16px ${def.color}55` }}>
-          Атаковать
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onStrike}
+          disabled={ap < strikeCost}
+          className="rounded-xl py-3 text-xs font-bold text-white disabled:opacity-40"
+          style={{ background: def.color }}
+        >
+          Атака ({strikeCost} AP)
         </button>
-        <button onClick={onFlee} className="rounded-xl border border-zinc-700 px-4 py-3 text-xs font-bold text-zinc-400">
-          Выход
+        <button
+          type="button"
+          onClick={onDefend}
+          disabled={ap < 1}
+          className="rounded-xl border border-zinc-600 bg-zinc-900 py-3 text-xs font-bold text-zinc-200 disabled:opacity-40"
+        >
+          {gear.hasShield ? 'Блок щитом' : 'Защитная стойка'} (1 AP)
+        </button>
+        <button
+          type="button"
+          onClick={onEndTurn}
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 py-3 text-xs font-bold text-amber-300"
+        >
+          Конец хода
+        </button>
+        <button
+          type="button"
+          onClick={onFlee}
+          className="rounded-xl border border-zinc-700 py-3 text-xs font-bold text-zinc-400"
+        >
+          Отступить
         </button>
       </div>
-      <div className="max-h-48 space-y-1 overflow-y-auto rounded-xl border border-neon/20 bg-black/60 p-3 font-mono text-[11px] leading-relaxed text-neon/90">
+      {showTrinket && (
+        <button
+          type="button"
+          disabled={s.trinketUsed}
+          onClick={onTrinket}
+          className="w-full rounded-xl border border-violet-500/40 bg-violet-500/10 py-2.5 text-xs font-bold text-violet-300 disabled:opacity-40"
+        >
+          Глаз аномалии: +{gear.trinketShield} щита {s.trinketUsed ? '(использован)' : ''}
+        </button>
+      )}
+
+      <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-neon/20 bg-black/60 p-3 font-mono text-[11px] leading-relaxed text-neon/90">
         {[...s.log].reverse().map((line, i) => (
           <div key={`${i}-${line.slice(0, 24)}`}>{line}</div>
         ))}
@@ -244,7 +360,18 @@ function BreachCombat({ player, onAttack, onFlee }) {
   );
 }
 
-function RadarTab({ player, onTravel, onEnter, onAttack, onFlee, onRefreshRadar }) {
+function RadarTab({
+  player,
+  onTravel,
+  onEnter,
+  onStrike,
+  onDefend,
+  onEndTurn,
+  onTrinket,
+  onContinue,
+  onFlee,
+  onRefreshRadar,
+}) {
   const now = useNow(true, 1000);
   const breaches = player.radar?.breaches ?? [];
   const [selectedId, setSelectedId] = useState(breaches[0]?.id ?? null);
@@ -261,7 +388,17 @@ function RadarTab({ player, onTravel, onEnter, onAttack, onFlee, onRefreshRadar 
   }, [breaches, selectedId]);
 
   if (player.breach?.active) {
-    return <BreachCombat player={player} onAttack={onAttack} onFlee={onFlee} />;
+    return (
+      <BreachCombat
+        player={player}
+        onStrike={onStrike}
+        onDefend={onDefend}
+        onEndTurn={onEndTurn}
+        onTrinket={onTrinket}
+        onContinue={onContinue}
+        onFlee={onFlee}
+      />
+    );
   }
 
   return (
@@ -355,7 +492,11 @@ export default function WorldScreen({
   onSetSteps,
   onTravel,
   onEnterBreach,
-  onBreachAttack,
+  onBreachStrike,
+  onBreachDefend,
+  onBreachEndTurn,
+  onBreachTrinket,
+  onBreachContinue,
   onBreachFlee,
   onRefreshRadar,
 }) {
@@ -389,7 +530,11 @@ export default function WorldScreen({
             player={player}
             onTravel={onTravel}
             onEnter={onEnterBreach}
-            onAttack={onBreachAttack}
+            onStrike={onBreachStrike}
+            onDefend={onBreachDefend}
+            onEndTurn={onBreachEndTurn}
+            onTrinket={onBreachTrinket}
+            onContinue={onBreachContinue}
             onFlee={onBreachFlee}
             onRefreshRadar={onRefreshRadar}
           />

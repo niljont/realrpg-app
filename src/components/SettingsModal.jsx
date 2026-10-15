@@ -1,10 +1,7 @@
-import { useState } from 'react';
-import { LogOut, RefreshCw, RotateCcw } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LogOut, Pencil, RefreshCw, RotateCcw } from 'lucide-react';
 import Modal from './Modal';
-import { getSupabaseHost } from '../lib/supabase';
-
-const BUILD =
-  typeof __APP_BUILD__ !== 'undefined' ? __APP_BUILD__ : 'dev';
+import { canChangeName, formatNameCooldown, msUntilNameChange } from '../lib/game';
 
 async function clearAppCacheAndReload() {
   try {
@@ -29,9 +26,21 @@ async function clearAppCacheAndReload() {
   window.location.replace(url.toString());
 }
 
-export default function SettingsModal({ onClose, onSignOut, onResetAccount }) {
-  const [view, setView] = useState('menu'); // menu | logout | reset1 | reset2
+export default function SettingsModal({ player, onClose, onSignOut, onResetAccount, onRename }) {
+  const [view, setView] = useState('menu'); // menu | rename | logout | reset1 | reset2
   const [busy, setBusy] = useState(false);
+  const [nameDraft, setNameDraft] = useState(player?.name ?? '');
+  const [renameError, setRenameError] = useState('');
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (view !== 'menu' && view !== 'rename') return undefined;
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, [view]);
+
+  const waitMs = msUntilNameChange(player, now);
+  const renameReady = canChangeName(player, now);
 
   const run = async (fn) => {
     if (busy) return;
@@ -42,6 +51,65 @@ export default function SettingsModal({ onClose, onSignOut, onResetAccount }) {
       setBusy(false);
     }
   };
+
+  if (view === 'rename') {
+    return (
+      <Modal title="Смена имени" onClose={onClose}>
+        <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">
+          Имя можно менять раз в 7 дней. Сейчас: <span className="text-zinc-300">{player?.name}</span>
+        </p>
+        {!renameReady && (
+          <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+            Доступно через {formatNameCooldown(waitMs)}
+          </div>
+        )}
+        <input
+          type="text"
+          value={nameDraft}
+          maxLength={24}
+          disabled={!renameReady || busy}
+          onChange={(e) => {
+            setNameDraft(e.target.value);
+            setRenameError('');
+          }}
+          className="mb-2 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-sm text-zinc-100 outline-none focus:border-neon/50 disabled:opacity-50"
+          placeholder="Новое имя"
+          autoComplete="nickname"
+        />
+        {renameError && <p className="mb-3 text-[11px] text-red-400">{renameError}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setRenameError('');
+              setView('menu');
+            }}
+            className="flex-1 rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
+          >
+            Назад
+          </button>
+          <button
+            type="button"
+            disabled={busy || !renameReady}
+            onClick={() =>
+              run(async () => {
+                const res = await onRename(nameDraft);
+                if (res?.error) {
+                  setRenameError(res.error);
+                  return;
+                }
+                onClose();
+              })
+            }
+            className="flex-1 rounded-xl border border-neon/40 bg-neon/15 py-3 text-sm font-bold text-neon disabled:opacity-40"
+          >
+            {busy ? '…' : 'Сохранить'}
+          </button>
+        </div>
+      </Modal>
+    );
+  }
 
   if (view === 'logout') {
     return (
@@ -137,6 +205,24 @@ export default function SettingsModal({ onClose, onSignOut, onResetAccount }) {
       <div className="space-y-2">
         <button
           type="button"
+          onClick={() => {
+            setNameDraft(player?.name ?? '');
+            setRenameError('');
+            setView('rename');
+          }}
+          className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
+        >
+          <Pencil size={18} className="shrink-0 text-neon" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-zinc-100">Сменить имя</div>
+            <div className="truncate text-[11px] text-zinc-500">
+              {renameReady ? `Сейчас: ${player?.name}` : `Через ${formatNameCooldown(waitMs)}`}
+            </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setView('logout')}
           className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
         >
@@ -171,18 +257,6 @@ export default function SettingsModal({ onClose, onSignOut, onResetAccount }) {
             <div className="text-[11px] text-zinc-500">Два предупреждения · прогресс будет стёрт</div>
           </div>
         </button>
-
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 px-3 py-2.5 text-[10px] leading-relaxed text-zinc-500">
-          <div>
-            Сборка: <span className="text-zinc-400">{BUILD}</span>
-          </div>
-          <div className="mt-0.5 break-all">
-            БД: <span className="text-zinc-400">{getSupabaseHost()}</span>
-          </div>
-          <div className="mt-1 text-zinc-600">
-            На телефоне и на ПК хост БД должен совпадать. Если нет — проверь Vercel env.
-          </div>
-        </div>
       </div>
     </Modal>
   );
