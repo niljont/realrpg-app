@@ -3,6 +3,7 @@ import { Medal, RefreshCw, Trophy } from 'lucide-react';
 import { fetchLeaderboard, powerScore, sortLeaderboard } from '../lib/profileSync';
 import { STAT_META, TITLES, formatPalium, stampPlayer, titleName } from '../lib/game';
 import { useAuth } from '../context/AuthContext';
+import PlayerProfileModal from './PlayerProfileModal';
 
 function rowTitle(row) {
   const id = row.active_title && TITLES[row.active_title] ? row.active_title : null;
@@ -74,6 +75,7 @@ export default function LeaderboardScreen({ player }) {
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [fetchedAt, setFetchedAt] = useState(null);
+  const [viewPlayer, setViewPlayer] = useState(null);
   const reqId = useRef(0);
   const playerRef = useRef(player);
   playerRef.current = player;
@@ -169,11 +171,12 @@ export default function LeaderboardScreen({ player }) {
         </div>
 
         <p className="text-[11px] text-zinc-500">
-          {tab === 'overall' && 'Сумма характеристик. Данные с сервера после синка (~1–2 с после действий).'}
-          {tab === 'level' && 'Максимальный уровень игрока.'}
-          {['STR', 'END', 'AGI', 'INT', 'WIL'].includes(tab) && `Топ по ${STAT_META[tab].label}.`}
-          {tab === 'breaches' && 'Топ по числу закрытых Брешей.'}
-          {tab === 'rich' && 'Самые богатые по Палиуму.'}
+          Нажми на игрока — радар статов и активность за 7 дней.
+          {tab === 'overall' && ' Сумма характеристик после синка.'}
+          {tab === 'level' && ' Максимальный уровень.'}
+          {['STR', 'END', 'AGI', 'INT', 'WIL'].includes(tab) && ` Топ по ${STAT_META[tab].label}.`}
+          {tab === 'breaches' && ' Топ по закрытым Брешам.'}
+          {tab === 'rich' && ' Топ по Палиуму.'}
         </p>
 
         {error && (
@@ -198,9 +201,11 @@ export default function LeaderboardScreen({ player }) {
               const color = rankColor(i);
               const title = rowTitle(row);
               return (
-                <div
+                <button
                   key={row.id}
-                  className="rounded-xl border px-3 py-2.5"
+                  type="button"
+                  onClick={() => setViewPlayer({ id: row.id, name: row.username })}
+                  className="w-full rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99]"
                   style={{
                     borderColor: mine ? '#22d3ee88' : '#27272a',
                     background: mine ? 'rgb(34 211 238 / 0.08)' : 'rgb(24 24 27 / 0.7)',
@@ -215,10 +220,7 @@ export default function LeaderboardScreen({ player }) {
                       <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                         <span className="truncate font-display text-sm text-zinc-100">{row.username}</span>
                         {title && (
-                          <span
-                            className="truncate text-[10px] font-bold tracking-wide"
-                            style={{ color: title.color }}
-                          >
+                          <span className="truncate text-[10px] font-bold tracking-wide" style={{ color: title.color }}>
                             «{title.label}»
                           </span>
                         )}
@@ -228,6 +230,7 @@ export default function LeaderboardScreen({ player }) {
                         STR {row.strength} · END {row.endurance} · AGI {row.agility} · INT {row.intelligence} · WIL{' '}
                         {row.willpower}
                       </div>
+                      <div className="mt-0.5 text-[9px] text-zinc-600">нажми · профиль</div>
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="font-display text-sm" style={{ color: accent }}>
@@ -235,12 +238,20 @@ export default function LeaderboardScreen({ player }) {
                       </div>
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
         )}
       </section>
+
+      {viewPlayer && (
+        <PlayerProfileModal
+          userId={viewPlayer.id}
+          fallbackName={viewPlayer.name}
+          onClose={() => setViewPlayer(null)}
+        />
+      )}
     </div>
   );
 }

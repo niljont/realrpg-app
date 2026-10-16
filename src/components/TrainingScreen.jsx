@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Check, Dumbbell, Plus, Trash2, X } from 'lucide-react';
+import { Ban, Check, Dumbbell, Plus, Trash2, X } from 'lucide-react';
 import {
   CUSTOM_QUEST_POINTS,
   EXERCISES,
   LOAD_DIFFICULTIES,
   STATS,
   STAT_META,
+  customQuestStreakView,
   dayKey,
   exercisePoints,
   findExercise,
@@ -148,12 +149,14 @@ function CustomQuestForm({ color, onCreate, onCancel }) {
   );
 }
 
-function CustomQuestRow({ quest, color, mult, onComplete, onRemove }) {
-  const [confirm, setConfirm] = useState(false);
+function CustomQuestRow({ quest, color, mult, today, onComplete, onBlock, onRemove }) {
+  const [confirm, setConfirm] = useState(null); // done | fail | null
   const raw = CUSTOM_QUEST_POINTS * mult;
   const { awarded: pts, label: ptsLabel } = pointsPreview(raw);
+  const { current, maxStreak, doneToday, blocked } = customQuestStreakView(quest, today);
+  const inactive = blocked || doneToday;
 
-  if (confirm) {
+  if (confirm === 'done') {
     return (
       <div className="rounded-xl border px-3 py-3" style={{ borderColor: `${color}66`, background: `${color}14` }}>
         <div className="text-sm font-semibold text-zinc-100">Квест выполнен?</div>
@@ -167,7 +170,7 @@ function CustomQuestRow({ quest, color, mult, onComplete, onRemove }) {
             type="button"
             onClick={() => {
               onComplete(quest.id);
-              setConfirm(false);
+              setConfirm(null);
             }}
             className="rounded-lg py-2.5 text-xs font-bold text-white"
             style={{ background: color, boxShadow: `0 0 12px ${color}66` }}
@@ -176,7 +179,38 @@ function CustomQuestRow({ quest, color, mult, onComplete, onRemove }) {
           </button>
           <button
             type="button"
-            onClick={() => setConfirm(false)}
+            onClick={() => setConfirm(null)}
+            className="rounded-lg border border-zinc-700 py-2.5 text-xs font-bold text-zinc-400"
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (confirm === 'fail') {
+    return (
+      <div className="rounded-xl border border-rose-500/50 bg-rose-500/10 px-3 py-3">
+        <div className="text-sm font-semibold text-rose-300">Отметить срыв?</div>
+        <div className="mt-0.5 text-[11px] text-zinc-400">«{quest.name}»</div>
+        <div className="mt-1 text-[10px] text-zinc-500">
+          Квест станет неактивным до 00:00. Стрик сбросится (рекорд {maxStreak} сохранится).
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              onBlock(quest.id);
+              setConfirm(null);
+            }}
+            className="rounded-lg bg-rose-600 py-2.5 text-xs font-bold text-white"
+          >
+            Да, сорвался
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirm(null)}
             className="rounded-lg border border-zinc-700 py-2.5 text-xs font-bold text-zinc-400"
           >
             Отмена
@@ -187,23 +221,49 @@ function CustomQuestRow({ quest, color, mult, onComplete, onRemove }) {
   }
 
   return (
-    <div className="rounded-xl border border-violet-500/25 bg-violet-500/5 px-3 py-2.5">
+    <div
+      className={`rounded-xl border px-3 py-2.5 ${
+        blocked
+          ? 'border-rose-500/60 bg-rose-500/15'
+          : doneToday
+            ? 'border-emerald-500/35 bg-emerald-500/10'
+            : 'border-violet-500/25 bg-violet-500/5'
+      }`}
+    >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-zinc-100">{quest.name}</div>
+          <div className={`text-sm font-semibold ${blocked ? 'text-rose-300' : 'text-zinc-100'}`}>
+            {quest.name}
+            {blocked ? ' · срыв' : doneToday ? ' · выполнено' : ''}
+          </div>
           {quest.desc ? <div className="mt-0.5 text-[11px] text-zinc-500">{quest.desc}</div> : null}
           <div className="mt-1 text-[10px] text-zinc-500">
             1 квест = {CUSTOM_QUEST_POINTS} pt
-            {pts > 0 && <span style={{ color }}>{ptsLabel}</span>}
+            {!inactive && pts > 0 && <span style={{ color }}>{ptsLabel}</span>}
+          </div>
+          <div className={`mt-1 text-[10px] font-bold ${blocked ? 'text-rose-400' : 'text-violet-300/90'}`}>
+            Стрик {current} · рекорд {maxStreak}
+            {blocked ? ' · блок до 00:00' : ''}
           </div>
         </div>
         <button
           type="button"
-          onClick={() => setConfirm(true)}
-          className="rounded-lg px-3 py-2 text-[11px] font-bold text-white transition active:scale-95"
-          style={{ background: color, boxShadow: `0 0 12px ${color}77` }}
+          disabled={inactive}
+          onClick={() => setConfirm('done')}
+          className="rounded-lg px-3 py-2 text-[11px] font-bold text-white transition active:scale-95 disabled:opacity-35"
+          style={{ background: color, boxShadow: inactive ? 'none' : `0 0 12px ${color}77` }}
         >
           Готово
+        </button>
+        <button
+          type="button"
+          disabled={inactive}
+          onClick={() => setConfirm('fail')}
+          className="rounded-lg border border-rose-500/40 p-2 text-rose-400 disabled:opacity-35"
+          aria-label="Срыв"
+          title="Срыв"
+        >
+          <Ban size={14} />
         </button>
         <button
           type="button"
@@ -218,7 +278,7 @@ function CustomQuestRow({ quest, color, mult, onComplete, onRemove }) {
   );
 }
 
-export default function TrainingScreen({ player, onTrain, onAddQuest, onRemoveQuest }) {
+export default function TrainingScreen({ player, onTrain, onAddQuest, onRemoveQuest, onBlockQuest }) {
   const [stat, setStat] = useState('STR');
   const [creating, setCreating] = useState(false);
   const today = dayKey();
@@ -327,7 +387,9 @@ export default function TrainingScreen({ player, onTrain, onAddQuest, onRemoveQu
                 quest={q}
                 color={color}
                 mult={mult}
+                today={today}
                 onComplete={(id) => onTrain('WIL', id, 1)}
+                onBlock={(id) => onBlockQuest?.(id)}
                 onRemove={(id) => onRemoveQuest?.(id)}
               />
             ))}
@@ -340,6 +402,23 @@ export default function TrainingScreen({ player, onTrain, onAddQuest, onRemoveQu
           <h3 className="mb-2 font-display text-xs tracking-widest text-zinc-400">ЖУРНАЛ ЗА СЕГОДНЯ</h3>
           <ul className="space-y-1.5 text-xs">
             {[...todayLog].reverse().map((e) => {
+              const isSteps = e.kind === 'steps' || e.exId === 'steps';
+              if (isSteps) {
+                const d = Number(e.delta) || 0;
+                const sign = d > 0 ? '+' : '';
+                return (
+                  <li key={e.ts} className="flex justify-between border-b border-zinc-800/70 pb-1.5 last:border-0">
+                    <span className="text-zinc-300">
+                      <b className="text-cyan-400">Шаги</b> {sign}
+                      {d.toLocaleString('ru-RU')}
+                      <span className="text-zinc-500"> · сегодня {(e.total ?? e.amount ?? 0).toLocaleString('ru-RU')}</span>
+                    </span>
+                    <span className="tabular-nums text-zinc-500">
+                      {new Date(e.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </li>
+                );
+              }
               const ex = findExercise(e.stat, e.exId, player);
               return (
                 <li key={e.ts} className="flex justify-between border-b border-zinc-800/70 pb-1.5 last:border-0">

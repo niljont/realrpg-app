@@ -1,4 +1,4 @@
-import { dayKey, formatPalium, getStats, withHp, statMultiplier } from './game';
+import { dayKey, formatPalium, getStats, pruneActivityLog, withHp, statMultiplier } from './game';
 import {
   COMBAT_AP_MAX,
   attackApCost,
@@ -259,6 +259,7 @@ export function syncStepsDay(p, now = Date.now()) {
 /**
  * Записать шаги за сегодня.
  * Разница с предыдущим вводом добавляется (или вычитается) из банка.
+ * Изменение попадает в журнал активности (и в недельную ленту рейтинга).
  */
 export function setTodaySteps(p, raw) {
   const value = Math.max(0, Math.floor(Number(raw) || 0));
@@ -266,10 +267,31 @@ export function setTodaySteps(p, raw) {
   const prev = synced.steps.today ?? 0;
   const delta = value - prev;
   const bank = Math.max(0, (synced.steps.bank ?? 0) + delta);
+  const now = Date.now();
+  let log = synced.log ?? [];
+  if (delta !== 0) {
+    log = pruneActivityLog(
+      [
+        ...log,
+        {
+          ts: now,
+          date: dayKey(now),
+          kind: 'steps',
+          exId: 'steps',
+          amount: value,
+          total: value,
+          delta,
+          points: 0,
+        },
+      ],
+      now,
+    );
+  }
   return {
     player: {
       ...synced,
       steps: { ...synced.steps, today: value, bank },
+      log,
     },
     events: [{ type: 'gain', text: `Шаги за сегодня: ${value.toLocaleString('ru-RU')} · банк ${bank.toLocaleString('ru-RU')}` }],
   };

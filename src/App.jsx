@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dumbbell, Hammer, Map, Medal, UserRound } from 'lucide-react';
+import { Dumbbell, Hammer, Map, Medal, MessageCircle, UserRound } from 'lucide-react';
 import AuthScreen from './components/AuthScreen';
 import Hud from './components/Hud';
 import EnergyModal from './components/EnergyModal';
@@ -8,12 +8,14 @@ import TrainingScreen from './components/TrainingScreen';
 import WorldScreen from './components/WorldScreen';
 import ProfessionsScreen from './components/ProfessionsScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
+import ChatScreen from './components/ChatScreen';
 import UnlockOverlay from './components/UnlockOverlay';
 import { useAuth } from './context/AuthContext';
 import {
   applyTimeSystems,
   addCustomQuest,
   applyTraining,
+  blockCustomQuest,
   createPlayer,
   equipTitle,
   loadPlayer,
@@ -92,6 +94,7 @@ const TABS = [
   { id: 'training', label: 'Прокачка', Icon: Dumbbell },
   { id: 'world', label: 'Мир', Icon: Map },
   { id: 'professions', label: 'Профы', Icon: Hammer },
+  { id: 'chat', label: 'Чат', Icon: MessageCircle },
   { id: 'rank', label: 'Рейтинг', Icon: Medal },
 ];
 
@@ -281,48 +284,58 @@ export default function App() {
     );
   }
 
-  return (
-    <div className="system-bg min-h-dvh">
-      <div className="mx-auto flex min-h-dvh max-w-md flex-col">
-        <Hud
-          player={player}
-          onOpenEnergy={() => setModal('energy')}
-          onOpenTitles={() => {
-            setTab('status');
-            setStatusOpenRequest('titles');
-          }}
-          onSignOut={handleSignOut}
-          onResetAccount={async () => {
-            const fresh = createPlayer(player.name, player.gender || 'male');
-            setPlayer(fresh);
-            await syncPlayerToCloud(stampPlayer(fresh));
-          }}
-          onRename={async (newName) => {
-            const result = renamePlayer(player, newName);
-            if (result.error) return { error: result.error };
-            const next = stampPlayer(result.player);
-            setPlayer(next);
-            notify(result.events ?? []);
-            const sync = await syncPlayerToCloud(next);
-            if (sync && sync.ok === false) {
-              return { error: sync.error || 'Не удалось сохранить имя в облаке' };
-            }
-            try {
-              await supabase.auth.updateUser({
-                data: {
-                  username: next.name,
-                  display_name: next.name,
-                  full_name: next.name,
-                },
-              });
-            } catch {
-              /* ignore metadata */
-            }
-            return { ok: true };
-          }}
-        />
+  const chatMode = tab === 'chat';
 
-        <main className="flex-1 px-4 pt-4 pb-28">
+  return (
+    <div className={`system-bg ${chatMode ? 'h-dvh overflow-hidden' : 'min-h-dvh'}`}>
+      <div className={`mx-auto flex max-w-md flex-col ${chatMode ? 'h-dvh overflow-hidden' : 'min-h-dvh'}`}>
+        {!chatMode && (
+          <Hud
+            player={player}
+            onOpenEnergy={() => setModal('energy')}
+            onOpenTitles={() => {
+              setTab('status');
+              setStatusOpenRequest('titles');
+            }}
+            onSignOut={handleSignOut}
+            onResetAccount={async () => {
+              const fresh = createPlayer(player.name, player.gender || 'male');
+              setPlayer(fresh);
+              await syncPlayerToCloud(stampPlayer(fresh));
+            }}
+            onRename={async (newName) => {
+              const result = renamePlayer(player, newName);
+              if (result.error) return { error: result.error };
+              const next = stampPlayer(result.player);
+              setPlayer(next);
+              notify(result.events ?? []);
+              const sync = await syncPlayerToCloud(next);
+              if (sync && sync.ok === false) {
+                return { error: sync.error || 'Не удалось сохранить имя в облаке' };
+              }
+              try {
+                await supabase.auth.updateUser({
+                  data: {
+                    username: next.name,
+                    display_name: next.name,
+                    full_name: next.name,
+                  },
+                });
+              } catch {
+                /* ignore metadata */
+              }
+              return { ok: true };
+            }}
+          />
+        )}
+
+        <main
+          className={
+            chatMode
+              ? 'flex min-h-0 flex-1 flex-col overflow-hidden px-0 pt-[max(env(safe-area-inset-top),8px)] pb-[calc(3.75rem+env(safe-area-inset-bottom))]'
+              : 'flex-1 px-4 pt-4 pb-28'
+          }
+        >
           {tab === 'status' && (
             <StatusScreen
               player={player}
@@ -348,6 +361,7 @@ export default function App() {
               onTrain={(s, id, amt, rate) => commit(applyTraining(player, s, id, amt, rate))}
               onAddQuest={(data) => commit(sealResult(addCustomQuest(player, data)))}
               onRemoveQuest={(id) => commit(sealResult(removeCustomQuest(player, id)))}
+              onBlockQuest={(id) => commit(sealResult(blockCustomQuest(player, id)))}
             />
           )}
           {tab === 'world' && (
@@ -377,6 +391,7 @@ export default function App() {
               onCraftScroll={() => run(craftCheatmealScroll)}
             />
           )}
+          {tab === 'chat' && <ChatScreen player={player} />}
           {tab === 'rank' && <LeaderboardScreen player={player} />}
         </main>
 

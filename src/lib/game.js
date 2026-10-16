@@ -494,6 +494,61 @@ export function dayKey(date = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/** Вчерашний dayKey (локальная полночь). */
+export function dayKeyYesterday(today = dayKey()) {
+  const [y, m, d] = today.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - 1);
+  return dayKey(dt);
+}
+
+/** Активность храним 7 дней (локально и в публичном weekly_activity). */
+export const ACTIVITY_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+const ACTIVITY_LOG_CAP = 200;
+const WEEKLY_ACTIVITY_CAP = 150;
+
+export function pruneActivityLog(log, now = Date.now()) {
+  const cutoff = now - ACTIVITY_KEEP_MS;
+  return (Array.isArray(log) ? log : [])
+    .filter((e) => (Number(e?.ts) || 0) >= cutoff)
+    .slice(-ACTIVITY_LOG_CAP);
+}
+
+/**
+ * Публичная лента за неделю для рейтинга (без инвентаря/сейва).
+ * Лёгкий JSON ~несколько КБ на игрока.
+ */
+export function buildWeeklyActivity(p, now = Date.now()) {
+  const log = pruneActivityLog(p?.log, now);
+  const out = [];
+  for (const e of log) {
+    if (e.kind === 'steps' || e.exId === 'steps') {
+      out.push({
+        ts: e.ts,
+        date: e.date,
+        kind: 'steps',
+        name: 'Шаги',
+        amount: e.delta != null ? e.delta : e.amount,
+        total: e.total ?? e.amount,
+        points: 0,
+      });
+      continue;
+    }
+    const ex = findExercise(e.stat, e.exId, p);
+    out.push({
+      ts: e.ts,
+      date: e.date,
+      kind: e.custom ? 'quest' : 'train',
+      stat: e.stat,
+      name: ex?.name ?? e.exId,
+      amount: e.amount,
+      unit: ex?.unit ?? '',
+      points: Math.floor(Number(e.points) || 0),
+    });
+  }
+  return out.slice(-WEEKLY_ACTIVITY_CAP);
+}
+
 /* ---------- состояние игрока ---------- */
 
 const EMPTY_INV = {
@@ -624,7 +679,7 @@ export function hydratePlayer(p) {
     radar: p.radar ?? null,
     breach: p.breach?.active ? p.breach : null,
     world: { gathered: 0, cooked: 0, breaches: 0, breachWins: 0, ...(p.world ?? {}) },
-    log: Array.isArray(p.log) ? p.log.slice(-200) : [],
+    log: pruneActivityLog(Array.isArray(p.log) ? p.log : []),
     palium: migratePalium(p.palium ?? legacyCopper ?? 0, p.version ?? 0),
     energy: {
       strPoints: 0,
@@ -741,6 +796,10 @@ export function addCustomQuest(p, { name, desc = '' } = {}) {
     desc: note,
     createdAt: Date.now(),
     archived: false,
+    streak: 0,
+    maxStreak: 0,
+    lastCompletedDate: null,
+    blockedDate: null,
   };
   return {
     player: { ...p, customQuests: [...(p.customQuests ?? []), quest] },
@@ -760,6 +819,72 @@ export function removeCustomQuest(p, questId) {
   };
 }
 
+export function isCustomQuestBlocked(q, today = dayKey()) {
+  return Boolean(q?.blockedDate && q.blockedDate === today);
+}
+
+/** Текущий стрик для UI: обнуляется визуально, если пропущен день. */
+export function customQuestStreakView(q, today = dayKey()) {
+  const maxStreak = Math.max(0, Number(q?.maxStreak) || 0);
+  const stored = Math.max(0, Number(q?.streak) || 0);
+  const last = q?.lastCompletedDate ?? null;
+  const yesterday = dayKeyYesterday(today);
+  const doneToday = last === today;
+  const blocked = isCustomQuestBlocked(q, today);
+  let current = stored;
+  if (!doneToday && last !== yesterday) current = 0;
+  if (blocked) current = 0;
+  return { current, maxStreak: Math.max(maxStreak, stored), doneToday, blocked };
+}
+
+/** Срыв: квест красный и неактивен до 00:00, стрик сбрасывается (рекорд сохраняется). */
+export function blockCustomQuest(p, questId) {
+  const today = dayKey();
+  const list = p.customQuests ?? [];
+  const quest = list.find((q) => q.id === questId);
+  if (!quest || quest.archived) return { error: 'Квест не найден' };
+  if (isCustomQuestBlocked(quest, today)) return { error: 'Срыв уже отмечен сегодня' };
+  if (quest.lastCompletedDate === today) {
+    return { error: 'Сегодня квест уже выполнен — срыв недоступен' };
+  }
+  const maxStreak = Math.max(Number(quest.maxStreak) || 0, Number(quest.streak) || 0);
+  return {
+    player: {
+      ...p,
+      customQuests: list.map((q) =>
+        q.id === questId
+          ? { ...q, blockedDate: today, streak: 0, maxStreak }
+          : q,
+      ),
+    },
+    events: [{ type: 'error', text: `Срыв: «${quest.name}». Квест заблокирован до завтра. Рекорд стрика: ${maxStreak}` }],
+  };
+}
+
+function withQuestCompletion(p, questId, today) {
+  const list = p.customQuests ?? [];
+  const quest = list.find((q) => q.id === questId);
+  if (!quest) return p;
+  const yesterday = dayKeyYesterday(today);
+  const prev = Math.max(0, Number(quest.streak) || 0);
+  const nextStreak = quest.lastCompletedDate === yesterday ? prev + 1 : 1;
+  const maxStreak = Math.max(Number(quest.maxStreak) || 0, nextStreak);
+  return {
+    ...p,
+    customQuests: list.map((q) =>
+      q.id === questId
+        ? {
+            ...q,
+            streak: nextStreak,
+            maxStreak,
+            lastCompletedDate: today,
+            blockedDate: q.blockedDate === today ? null : q.blockedDate,
+          }
+        : q,
+    ),
+  };
+}
+
 export function equipTitle(p, id) {
   if (!TITLES[id] || !isTitleUnlocked(p, id)) return { error: 'Титул ещё не открыт' };
   return {
@@ -772,8 +897,16 @@ export function equipTitle(p, id) {
 export function applyTraining(p, stat, exId, amount, rateOverride) {
   const ex = findExercise(stat, exId, p);
   if (!ex) return { error: 'Неизвестное упражнение' };
-  if (ex.custom && (p.customQuests ?? []).find((q) => q.id === exId)?.archived) {
+  const customQuest = ex.custom ? (p.customQuests ?? []).find((q) => q.id === exId) : null;
+  if (ex.custom && (!customQuest || customQuest.archived)) {
     return { error: 'Квест удалён' };
+  }
+  const today = dayKey();
+  if (ex.custom && isCustomQuestBlocked(customQuest, today)) {
+    return { error: 'Квест заблокирован сегодня (срыв). Завтра снова доступен' };
+  }
+  if (ex.custom && customQuest.lastCompletedDate === today) {
+    return { error: 'Квест уже выполнен сегодня' };
   }
   if (ex.loadDifficulty && rateOverride == null) return { error: 'Выберите сложность' };
   const qty = ex.custom ? 1 : amount;
@@ -796,11 +929,12 @@ export function applyTraining(p, stat, exId, amount, rateOverride) {
       [stat]: Math.floor((p.statPoints[stat] ?? 0) + points),
     },
     totals: addTotals(p.totals, stat, { [exId]: qty }),
-    log: [
+    log: pruneActivityLog([
       ...(p.log ?? []),
       {
         ts: now,
-        date: dayKey(now),
+        date: today,
+        kind: ex.custom ? 'quest' : 'train',
         stat,
         exId,
         amount: qty,
@@ -808,8 +942,20 @@ export function applyTraining(p, stat, exId, amount, rateOverride) {
         rate: rateOverride ?? ex.rate,
         custom: Boolean(ex.custom),
       },
-    ],
+    ], now),
   };
+
+  if (ex.custom) {
+    next = withQuestCompletion(next, exId, today);
+    const view = customQuestStreakView(
+      (next.customQuests ?? []).find((q) => q.id === exId),
+      today,
+    );
+    events.push({
+      type: 'title',
+      text: `Стрик «${ex.name}»: ${view.current} дн. · рекорд ${view.maxStreak}`,
+    });
+  }
 
   const flooredNote =
     rawPoints > points ? ` (из ${Math.round(rawPoints * 10) / 10} ↓)` : '';

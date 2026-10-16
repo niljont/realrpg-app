@@ -1,9 +1,11 @@
 import {
+  buildWeeklyActivity,
   createPlayer,
   getStats,
   hydratePlayer,
   levelFromXp,
   pointsForStatLevel,
+  pruneActivityLog,
   xpForNext,
 } from './game';
 import { supabase } from './supabase';
@@ -14,7 +16,7 @@ export { pointsForStatLevel } from './game';
 export const PROFILE_PUBLIC_COLS =
   'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,breach_wins,active_title,gender,updated_at';
 
-const OPTIONAL_PROFILE_COLS = ['save_data', 'breach_wins', 'active_title', 'gender'];
+const OPTIONAL_PROFILE_COLS = ['save_data', 'breach_wins', 'active_title', 'gender', 'weekly_activity'];
 
 export function totalRepsFromPlayer(p) {
   const totals = p?.totals ?? {};
@@ -34,10 +36,8 @@ export function goldToPalium(gold) {
 export function playerToSaveData(player) {
   if (!player) return null;
   const save = { ...player };
-  // Не раздуваем облако бесконечным логом.
-  if (Array.isArray(save.log) && save.log.length > 200) {
-    save.log = save.log.slice(-200);
-  }
+  // Только последняя неделя активности.
+  save.log = pruneActivityLog(save.log);
   return save;
 }
 
@@ -64,8 +64,74 @@ export function playerToProfileRow(player, userId) {
     breach_wins: int(player.world?.breachWins),
     active_title: player.activeTitle || 'wanderer',
     gender: player.gender === 'female' ? 'female' : 'male',
+    weekly_activity: buildWeeklyActivity(player),
     save_data: playerToSaveData(player),
     updated_at: new Date().toISOString(),
+  };
+}
+
+/** Публичный профиль + недельная активность (для чата / рейтинга). */
+export async function fetchPlayerPublicProfile(userId) {
+  if (!userId) {
+    return { username: '', activity: [], stats: null, error: 'Нет игрока' };
+  }
+
+  const cols =
+    'username,level,strength,endurance,agility,intelligence,willpower,active_title,gender,weekly_activity';
+  const { data, error } = await supabase.from('profiles').select(cols).eq('id', userId).maybeSingle();
+
+  if (!error && data) {
+    return {
+      username: data.username || 'Игрок',
+      level: data.level ?? 1,
+      activeTitle: data.active_title || 'wanderer',
+      gender: data.gender === 'female' ? 'female' : 'male',
+      stats: {
+        STR: data.strength ?? 1,
+        END: data.endurance ?? 1,
+        AGI: data.agility ?? 1,
+        INT: data.intelligence ?? 1,
+        WIL: data.willpower ?? 1,
+      },
+      activity: Array.isArray(data.weekly_activity) ? data.weekly_activity : [],
+      error: null,
+    };
+  }
+
+  if (error && /weekly_activity|column|schema cache/i.test(error.message || '')) {
+    const fallback =
+      'username,level,strength,endurance,agility,intelligence,willpower,active_title,gender';
+    const { data: d2, error: e2 } = await supabase.from('profiles').select(fallback).eq('id', userId).maybeSingle();
+    if (e2) throw e2;
+    return {
+      username: d2?.username || 'Игрок',
+      level: d2?.level ?? 1,
+      activeTitle: d2?.active_title || 'wanderer',
+      gender: d2?.gender === 'female' ? 'female' : 'male',
+      stats: d2
+        ? {
+            STR: d2.strength ?? 1,
+            END: d2.endurance ?? 1,
+            AGI: d2.agility ?? 1,
+            INT: d2.intelligence ?? 1,
+            WIL: d2.willpower ?? 1,
+          }
+        : null,
+      activity: [],
+      error: 'Нужна колонка weekly_activity (supabase/add_weekly_activity.sql)',
+    };
+  }
+  if (error) throw error;
+  return { username: '', activity: [], stats: null, error: null };
+}
+
+/** @deprecated use fetchPlayerPublicProfile */
+export async function fetchPlayerWeeklyActivity(userId) {
+  const p = await fetchPlayerPublicProfile(userId);
+  return {
+    username: p.username,
+    activity: p.activity,
+    error: p.error,
   };
 }
 
