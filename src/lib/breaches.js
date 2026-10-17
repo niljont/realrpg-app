@@ -1,4 +1,16 @@
-import { dayKey, formatPalium, getStats, pruneActivityLog, withHp, statMultiplier } from './game';
+import {
+  checkAchievements,
+  dayKey,
+  floorAwardPoints,
+  formatPalium,
+  getStats,
+  levelFromXp,
+  pruneActivityLog,
+  statLevel,
+  withHp,
+  xpMultiplier,
+  statMultiplier,
+} from './game';
 import {
   COMBAT_AP_MAX,
   attackApCost,
@@ -241,25 +253,55 @@ export function ensureRadar(p, now = Date.now()) {
 
 /* ---------- банк шагов ---------- */
 
+/** 1000 шагов = 10 END. */
+export const STEPS_PER_END_BLOCK = 1000;
+export const END_PER_STEPS_BLOCK = 10;
+
 export function emptySteps() {
-  return { date: '', today: 0, bank: 0 };
+  return { date: '', today: 0, bank: 0, credited: 0 };
 }
 
-/** Синхронизирует дневной ввод: при смене даты today обнуляется, bank сохраняется. */
+/** Синхронизирует дневной ввод: при смене даты today/credited обнуляются, bank сохраняется. */
 export function syncStepsDay(p, now = Date.now()) {
   const today = dayKey(now);
   const steps = { ...emptySteps(), ...(p.steps ?? {}) };
-  if (steps.date === today) return { player: { ...p, steps }, changed: false };
+  if (steps.date === today) {
+    return {
+      player: { ...p, steps: { ...steps, credited: Math.max(0, steps.credited ?? 0) } },
+      changed: false,
+    };
+  }
   return {
-    player: { ...p, steps: { date: today, today: 0, bank: Math.max(0, steps.bank ?? 0) } },
+    player: {
+      ...p,
+      steps: { date: today, today: 0, bank: Math.max(0, steps.bank ?? 0), credited: 0 },
+    },
     changed: true,
+  };
+}
+
+/** Сколько END даст запись нового значения шагов (без изменения игрока). */
+export function previewStepsEnd(p, rawToday) {
+  const value = Math.max(0, Math.floor(Number(rawToday) || 0));
+  const synced = syncStepsDay(p).player;
+  const credited = Math.max(0, synced.steps.credited ?? 0);
+  const prevToday = synced.steps.today ?? 0;
+  const delta = value - prevToday;
+  const newlyCredited = Math.max(0, value - credited);
+  const base = (newlyCredited / STEPS_PER_END_BLOCK) * END_PER_STEPS_BLOCK;
+  const points = floorAwardPoints(base * xpMultiplier(synced, 'END'));
+  return {
+    value,
+    delta,
+    newlyCredited,
+    points,
+    credited,
   };
 }
 
 /**
  * Записать шаги за сегодня.
- * Разница с предыдущим вводом добавляется (или вычитается) из банка.
- * Изменение попадает в журнал активности (и в недельную ленту рейтинга).
+ * Разница с предыдущим вводом → банк; новые шаги сверх уже засчитанных → END (+ XP).
  */
 export function setTodaySteps(p, raw) {
   const value = Math.max(0, Math.floor(Number(raw) || 0));
@@ -267,34 +309,91 @@ export function setTodaySteps(p, raw) {
   const prev = synced.steps.today ?? 0;
   const delta = value - prev;
   const bank = Math.max(0, (synced.steps.bank ?? 0) + delta);
+  const credited = Math.max(0, synced.steps.credited ?? 0);
+  const newlyCredited = Math.max(0, value - credited);
   const now = Date.now();
-  let log = synced.log ?? [];
-  if (delta !== 0) {
-    log = pruneActivityLog(
-      [
-        ...log,
-        {
-          ts: now,
-          date: dayKey(now),
-          kind: 'steps',
-          exId: 'steps',
-          amount: value,
-          total: value,
-          delta,
-          points: 0,
-        },
-      ],
-      now,
-    );
-  }
-  return {
-    player: {
-      ...synced,
-      steps: { ...synced.steps, today: value, bank },
-      log,
+  const today = dayKey(now);
+
+  const base = (newlyCredited / STEPS_PER_END_BLOCK) * END_PER_STEPS_BLOCK;
+  const points = newlyCredited > 0 ? floorAwardPoints(base * xpMultiplier(synced, 'END', now)) : 0;
+
+  const events = [];
+  const prevLevel = levelFromXp(synced.xp).level;
+  const prevStat = statLevel(synced.statPoints?.END);
+
+  let next = {
+    ...synced,
+    steps: {
+      ...synced.steps,
+      today: value,
+      bank,
+      credited: credited + newlyCredited,
     },
-    events: [{ type: 'gain', text: `Шаги за сегодня: ${value.toLocaleString('ru-RU')} · банк ${bank.toLocaleString('ru-RU')}` }],
   };
+
+  if (points > 0) {
+    next = {
+      ...next,
+      xp: Math.floor((next.xp ?? 0) + points),
+      statPoints: {
+        ...next.statPoints,
+        END: Math.floor((next.statPoints?.END ?? 0) + points),
+      },
+      totals: {
+        ...(next.totals ?? {}),
+        walk_steps: (next.totals?.walk_steps ?? 0) + newlyCredited,
+      },
+    };
+  }
+
+  if (delta !== 0 || points > 0) {
+    next = {
+      ...next,
+      log: pruneActivityLog(
+        [
+          ...(next.log ?? []),
+          {
+            ts: now,
+            date: today,
+            kind: 'steps',
+            exId: 'steps',
+            amount: value,
+            total: value,
+            delta,
+            points,
+            newlyCredited,
+            stat: points > 0 ? 'END' : undefined,
+          },
+        ],
+        now,
+      ),
+    };
+  }
+
+  const stepTxt = `Шаги за сегодня: ${value.toLocaleString('ru-RU')} · банк ${bank.toLocaleString('ru-RU')}`;
+  if (points > 0) {
+    events.push({
+      type: 'gain',
+      text: `${stepTxt} · +${newlyCredited.toLocaleString('ru-RU')} шагов → +${points} END`,
+    });
+  } else if (delta !== 0) {
+    events.push({ type: 'gain', text: stepTxt });
+  } else {
+    return { player: next, events: [] };
+  }
+
+  const newStat = statLevel(next.statPoints.END);
+  if (points > 0 && newStat > prevStat) {
+    events.push({ type: 'stat', text: `Выносливость повышена: ${prevStat} → ${newStat}` });
+  }
+  const newLevel = levelFromXp(next.xp).level;
+  if (points > 0 && newLevel > prevLevel) {
+    next = { ...next, ap: next.maxAp };
+    events.push({ type: 'level', text: `УРОВЕНЬ ПОВЫШЕН: ${newLevel}! Энергия восстановлена` });
+  }
+
+  next = checkAchievements(next, events);
+  return { player: next, events };
 }
 
 /* ---------- переход / вход ---------- */

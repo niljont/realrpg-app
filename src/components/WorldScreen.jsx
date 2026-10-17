@@ -3,8 +3,11 @@ import { Clock, Crosshair, Footprints, Map, Pickaxe, Radio, Zap } from 'lucide-r
 import { formatPalium } from '../lib/game';
 import {
   BREACH_RANKS,
+  END_PER_STEPS_BLOCK,
+  STEPS_PER_END_BLOCK,
   formatSteps,
   msUntilRadarRefresh,
+  previewStepsEnd,
   rankLevelHint,
 } from '../lib/breaches';
 import { attackApCost, getGearBonuses } from '../lib/equipment';
@@ -52,6 +55,8 @@ function StepsBank({ player, onSetSteps }) {
     setValue(String(player.steps?.today || ''));
   }, [player.steps?.today, player.steps?.date]);
 
+  const preview = previewStepsEnd(player, value);
+
   return (
     <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
       <div className="mb-2 flex items-center gap-2">
@@ -83,8 +88,17 @@ function StepsBank({ player, onSetSteps }) {
           Записать
         </button>
       </div>
-      <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
-        Разница с прошлым вводом уходит в банк. Банк тратится на переходы к Брешам.
+      {preview.newlyCredited > 0 ? (
+        <p className="mt-2 text-[11px] font-bold leading-relaxed text-emerald-400">
+          +{preview.newlyCredited.toLocaleString('ru-RU')} шагов → +{preview.points} END
+        </p>
+      ) : (
+        <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+          Ходьба: {STEPS_PER_END_BLOCK.toLocaleString('ru-RU')} шагов = {END_PER_STEPS_BLOCK} END.
+        </p>
+      )}
+      <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+        Разница с прошлым вводом уходит в банк (переходы к Брешам). Бег в прокачке выгоднее на километр.
       </p>
     </div>
   );

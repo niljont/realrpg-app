@@ -406,6 +406,7 @@ export default function TrainingScreen({ player, onTrain, onAddQuest, onRemoveQu
               if (isSteps) {
                 const d = Number(e.delta) || 0;
                 const sign = d > 0 ? '+' : '';
+                const pts = Number(e.points) || 0;
                 return (
                   <li key={e.ts} className="flex justify-between border-b border-zinc-800/70 pb-1.5 last:border-0">
                     <span className="text-zinc-300">
@@ -415,6 +416,7 @@ export default function TrainingScreen({ player, onTrain, onAddQuest, onRemoveQu
                     </span>
                     <span className="tabular-nums text-zinc-500">
                       {new Date(e.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}
+                      {pts > 0 ? ` · +${pts} END` : ''}
                     </span>
                   </li>
                 );

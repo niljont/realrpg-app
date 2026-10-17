@@ -39,6 +39,7 @@ export const EXERCISES = {
     { id: 'jumprope', name: 'Скакалка', unit: 'прыжк.', rate: 0.2 },
     { id: 'burpees', name: 'Берпи', unit: 'повт.', rate: 2 },
     { id: 'squats', name: 'Выпрыгивания', unit: 'повт.', rate: 1 },
+    { id: 'stretching', name: 'Растяжка', unit: 'мин', rate: 1.5 },
   ],
   INT: [
     { id: 'reading', name: 'Чтение', unit: 'мин', rate: 1 },
@@ -530,7 +531,8 @@ export function buildWeeklyActivity(p, now = Date.now()) {
         name: 'Шаги',
         amount: e.delta != null ? e.delta : e.amount,
         total: e.total ?? e.amount,
-        points: 0,
+        points: Math.floor(Number(e.points) || 0),
+        stat: e.points > 0 ? 'END' : undefined,
       });
       continue;
     }
