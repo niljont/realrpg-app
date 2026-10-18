@@ -85,6 +85,14 @@ declare
   boss_name text;
   hit_reason text;
   who text;
+  spectator boolean := false;
+  spec_ids uuid[] := array[]::uuid[];
+  needs_scrub boolean := false;
+  hit record;
+  seen uuid[] := array[]::uuid[];
+  re_max int;
+  re_hp int;
+  re_strikes int;
 begin
   if uid is null then
     raise exception 'auth required';
@@ -100,6 +108,14 @@ begin
   who := left(coalesce(nullif(btrim(p_username), ''), 'Игрок'), 40);
   boss_name := names[1 + (abs(hashtext(p_day)) % array_length(names, 1))];
 
+  select coalesce(array_agg(p.id), array[]::uuid[])
+    into spec_ids
+  from public.profiles p
+  where lower(btrim(p.username)) in ('adminsha', 'админша');
+
+  spectator := uid = any(spec_ids)
+    or lower(btrim(who)) in ('adminsha', 'админша');
+
   insert into public.daily_boss (day, name, max_hp, hp)
   values (p_day, boss_name, 450, 450)
   on conflict (day) do nothing;
@@ -113,11 +129,81 @@ begin
       returning * into row;
   end if;
 
+  select exists (
+    select 1
+    from public.daily_boss_log l
+    where l.day = p_day
+      and (
+        l.user_id = any(spec_ids)
+        or lower(btrim(l.username)) in ('adminsha', 'админша')
+      )
+  ) or exists (
+    select 1
+    from public.daily_boss_contrib c
+    where c.day = p_day
+      and c.user_id = any(spec_ids)
+  )
+  into needs_scrub;
+
+  if needs_scrub then
+    delete from public.daily_boss_log l
+    where l.day = p_day
+      and (
+        l.user_id = any(spec_ids)
+        or lower(btrim(l.username)) in ('adminsha', 'админша')
+      );
+
+    re_max := 450;
+    re_hp := 450;
+    re_strikes := 0;
+    seen := array[]::uuid[];
+
+    for hit in
+      select l.user_id, l.damage
+      from public.daily_boss_log l
+      where l.day = p_day
+      order by l.created_at asc, l.id asc
+    loop
+      if hit.user_id <> all(seen) then
+        if coalesce(array_length(seen, 1), 0) >= 1 and re_hp > 0 then
+          re_max := re_max + 450;
+          re_hp := re_hp + 450;
+        end if;
+        seen := array_append(seen, hit.user_id);
+      end if;
+      if re_hp > 0 then
+        re_hp := greatest(0, re_hp - hit.damage);
+        re_strikes := re_strikes + 1;
+      end if;
+    end loop;
+
+    delete from public.daily_boss_contrib c
+    where c.day = p_day;
+
+    insert into public.daily_boss_contrib (day, user_id, damage)
+    select p_day, l.user_id, sum(l.damage)::int
+    from public.daily_boss_log l
+    where l.day = p_day
+    group by l.user_id;
+
+    update public.daily_boss
+      set max_hp = re_max,
+          hp = re_hp,
+          strikes = re_strikes,
+          updated_at = now()
+      where day = p_day
+      returning * into row;
+  end if;
+
   select damage into dealt
   from public.daily_boss_contrib
   where day = p_day and user_id = uid;
 
   dmg := greatest(0, coalesce(p_damage, 0));
+  if spectator then
+    dmg := 0;
+    dealt := 0;
+  end if;
 
   if dmg > 0 then
     if row.hp > 0 and coalesce(dealt, 0) = 0 and (

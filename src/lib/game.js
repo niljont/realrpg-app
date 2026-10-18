@@ -1328,7 +1328,7 @@ export function equipTitle(p, id) {
 }
 
 /** Прокачка: упражнения без траты AP → XP и статы (без Палиума). rateOverride — для снаряда. */
-export function applyTraining(p, stat, exId, amount, rateOverride) {
+export function applyTraining(p, stat, exId, amount, rateOverride, now = Date.now()) {
   const ex = findExercise(stat, exId, p);
   if (!ex) return { error: 'Неизвестное упражнение' };
   const customQuest = ex.custom ? (p.customQuests ?? []).find((q) => q.id === exId) : null;
@@ -1347,7 +1347,6 @@ export function applyTraining(p, stat, exId, amount, rateOverride) {
   const base = exercisePoints(ex, qty, rateOverride);
   if (base <= 0) return { error: 'Введите количество' };
 
-  const now = Date.now();
   const rawPoints = base * xpMultiplier(p, stat, now);
   const points = floorAwardPoints(rawPoints);
   if (points <= 0) return { error: 'Слишком мало для записи (нужно ≥ 1 pt после округления вниз)' };
@@ -1417,31 +1416,40 @@ export function applyTraining(p, stat, exId, amount, rateOverride) {
   };
 }
 
-/** Несколько упражнений одного стата за одну запись. */
-export function applyTrainingBatch(p, stat, rows) {
-  const list = (rows ?? []).filter((row) => Number(row?.amount) > 0);
+/** Несколько упражнений за одну галочку. Строка: { stat, id, amount, rate }. */
+export function applyTrainingMany(p, rows) {
+  const list = (rows ?? []).filter((row) => row?.stat && row?.id && Number(row.amount) > 0);
   if (!list.length) return { error: 'Введите хотя бы одно упражнение' };
   let player = p;
   const events = [];
   let total = 0;
   let applied = 0;
-  for (const row of list) {
-    const res = applyTraining(player, stat, row.id, row.amount, row.rate);
+  const base = Date.now();
+  list.forEach((row, i) => {
+    const res = applyTraining(player, row.stat, row.id, row.amount, row.rate, base + i);
     if (res.error) {
       events.push({ type: 'error', text: res.error });
-      continue;
+      return;
     }
     player = res.player;
     events.push(...(res.events ?? []));
     total += res.daily?.amount ?? 0;
     applied += 1;
-  }
-  if (!applied) return { error: events[0]?.text || 'Ничего не записано' };
+  });
+  if (!applied) return { error: events.find((e) => e.type === 'error')?.text || 'Ничего не записано' };
   return {
     player,
     events,
     daily: total > 0 ? { action: 'train', amount: total } : undefined,
   };
+}
+
+/** Несколько упражнений одного стата за одну запись. */
+export function applyTrainingBatch(p, stat, rows) {
+  return applyTrainingMany(
+    p,
+    (rows ?? []).map((row) => ({ ...row, stat: row.stat || stat })),
+  );
 }
 
 export function sumPoints(stat, values) {

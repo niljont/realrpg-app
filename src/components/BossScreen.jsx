@@ -1,5 +1,5 @@
 import { Skull } from 'lucide-react';
-import { bossReasonLabel } from '../lib/daily';
+import { bossReasonLabel, isBossSpectator } from '../lib/daily';
 
 function formatWhen(iso) {
   if (!iso) return '';
@@ -13,7 +13,8 @@ export default function BossScreen({ player, boss, onClaimBoss }) {
   const bossHp = boss ? Math.max(0, boss.hp ?? 0) : null;
   const bossMax = boss?.maxHp || 1;
   const bossPct = boss ? Math.round((bossHp / bossMax) * 100) : 0;
-  const bossReady = boss && bossHp === 0 && (boss.mine ?? 0) > 0 && player.bossClaimDate !== today;
+  const spectator = isBossSpectator(player?.name);
+  const bossReady = boss && !spectator && bossHp === 0 && (boss.mine ?? 0) > 0 && player.bossClaimDate !== today;
   const log = boss?.log ?? [];
 
   return (
@@ -37,12 +38,18 @@ export default function BossScreen({ player, boss, onClaimBoss }) {
                 HP {bossHp.toLocaleString('ru-RU')} / {bossMax.toLocaleString('ru-RU')}
               </span>
               <span>
-                Бойцов {boss.fighters ?? (boss.mine > 0 ? 1 : 0)} · твой вклад {Math.round(boss.mine || 0)}
+                Бойцов {boss.fighters ?? (boss.mine > 0 ? 1 : 0)}
+                {spectator ? '' : ` · твой вклад ${Math.round(boss.mine || 0)}`}
               </span>
             </div>
             <p className="text-[10px] leading-relaxed text-zinc-500">
               Запас растёт только от тех, кто сегодня ударил: 450 HP на бойца. Награда одинаковая и только участникам — 0.100 Палиум и вещь вашего уровня, чаще зелёная.
             </p>
+            {spectator && (
+              <p className="text-[10px] leading-relaxed text-zinc-400">
+                Этот аккаунт не участвует в бою: удары не снимают здоровье и не считаются в числе бойцов.
+              </p>
+            )}
             {!boss.shared && (
               <p className="text-[10px] leading-relaxed text-amber-200/80">
                 {boss.error
@@ -56,13 +63,15 @@ export default function BossScreen({ player, boss, onClaimBoss }) {
               onClick={onClaimBoss}
               className="w-full rounded-lg bg-red-600 py-2.5 text-xs font-bold text-white disabled:opacity-35"
             >
-              {player.bossClaimDate === today
-                ? 'Награда получена'
-                : bossHp === 0 && (boss.mine ?? 0) <= 0
-                  ? 'Ты не участвовал'
-                  : bossHp === 0
-                    ? 'Забрать добычу'
-                    : 'Босс ещё держится'}
+              {spectator
+                ? 'Аккаунт не участвует'
+                : player.bossClaimDate === today
+                  ? 'Награда получена'
+                  : bossHp === 0 && (boss.mine ?? 0) <= 0
+                    ? 'Ты не участвовал'
+                    : bossHp === 0
+                      ? 'Забрать добычу'
+                      : 'Босс ещё держится'}
             </button>
           </>
         ) : (

@@ -16,7 +16,7 @@ import {
   applyTimeSystems,
   addCustomQuest,
   applyTraining,
-  applyTrainingBatch,
+  applyTrainingMany,
   blockCustomQuest,
   createPlayer,
   equipTitle,
@@ -279,7 +279,7 @@ export default function App() {
     if (!player) return undefined;
     let cancel = false;
     const pull = () => {
-      strikeDailyBoss(dayKey(), 0).then((state) => {
+      strikeDailyBoss(dayKey(), 0, 'train', player?.name).then((state) => {
         if (!cancel && state) setBoss(state);
       });
     };
@@ -289,7 +289,7 @@ export default function App() {
       cancel = true;
       clearInterval(id);
     };
-  }, [Boolean(player), tab]);
+  }, [Boolean(player), player?.name, tab]);
 
   const markChatSeen = useCallback(
     (stamp) => {
@@ -459,7 +459,7 @@ export default function App() {
             <TrainingScreen
               player={player}
               onTrain={(s, id, amt, rate) => commit(applyTraining(player, s, id, amt, rate))}
-              onTrainBatch={(s, rows) => commit(applyTrainingBatch(player, s, rows))}
+              onTrainMany={(rows) => commit(applyTrainingMany(player, rows))}
               onAddQuest={(data) => commit(sealResult(addCustomQuest(player, data)))}
               onRemoveQuest={(id) => commit(sealResult(removeCustomQuest(player, id)))}
               onBlockQuest={(id) => commit(sealResult(blockCustomQuest(player, id)))}

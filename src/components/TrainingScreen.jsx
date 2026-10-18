@@ -25,7 +25,7 @@ function pointsPreview(raw) {
   return { awarded, label: ` · +${awarded} pt` };
 }
 
-function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff }) {
+function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff, showCheck, onConfirm }) {
   const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === diff) : null;
   const rate = load?.rate ?? ex.rate;
   const raw = exercisePoints(ex, Number(amount) || 0, rate) * mult;
@@ -60,6 +60,18 @@ function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff }) {
           className="w-20 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-right font-bold tabular-nums outline-none"
           style={{ color }}
         />
+        {showCheck && (
+          <button
+            type="button"
+            disabled={pts <= 0}
+            onClick={onConfirm}
+            className="flex min-w-12 items-center justify-center rounded-lg px-3 py-2 text-xs font-bold text-white transition active:scale-95 disabled:opacity-25"
+            style={{ background: color, boxShadow: pts > 0 ? `0 0 12px ${color}77` : 'none' }}
+            aria-label="Подтвердить"
+          >
+            <Check size={14} />
+          </button>
+        )}
       </div>
       {ex.loadDifficulty && (
         <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
@@ -268,7 +280,22 @@ function CustomQuestRow({ quest, color, mult, today, onComplete, onBlock, onRemo
   );
 }
 
-export default function TrainingScreen({ player, onTrain, onTrainBatch, onAddQuest, onRemoveQuest, onBlockQuest }) {
+function filledExercise(stat, ex, draft, mult) {
+  const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === draft.diff) : null;
+  const rate = load?.rate ?? ex.rate;
+  const pts = floorAwardPoints(exercisePoints(ex, Number(draft.amount) || 0, rate) * mult);
+  if (pts <= 0) return null;
+  return {
+    stat,
+    id: ex.id,
+    name: ex.name,
+    amount: Number(draft.amount),
+    rate: ex.loadDifficulty ? rate : undefined,
+    pts,
+  };
+}
+
+export default function TrainingScreen({ player, onTrain, onTrainMany, onAddQuest, onRemoveQuest, onBlockQuest }) {
   const [stat, setStat] = useState('STR');
   const [creating, setCreating] = useState(false);
   const [drafts, setDrafts] = useState({});
@@ -287,7 +314,7 @@ export default function TrainingScreen({ player, onTrain, onTrainBatch, onAddQue
           <h2 className="font-display text-sm tracking-widest text-neon/90">ПРОКАЧКА</h2>
         </div>
         <p className="mb-3 text-[11px] text-zinc-500">
-          Выполняйте упражнения — качайте статы и XP. Дробные очки пишутся вниз (12.5 → 12). AP здесь не тратится.
+          Несколько упражнений за раз подтверждаются одной галочкой. Дробные очки пишутся вниз (12.5 → 12). AP здесь не тратится.
         </p>
         <div className="grid grid-cols-5 gap-1.5">
           {STATS.map((s) => (
@@ -325,62 +352,74 @@ export default function TrainingScreen({ player, onTrain, onTrainBatch, onAddQue
           <span>{STAT_META[stat].label}</span>
           {mult > 1 && <span className="font-bold text-amber-400">XP ×{mult.toFixed(2)}</span>}
         </div>
-        <div className="space-y-2">
-          {EXERCISES[stat].map((ex) => {
-            const draft = drafts[`${stat}:${ex.id}`] ?? { amount: '', diff: 'normal' };
-            return (
-              <ExerciseRow
-                key={`${stat}-${ex.id}`}
-                ex={ex}
-                color={color}
-                mult={mult}
-                amount={draft.amount}
-                diff={draft.diff}
-                onAmount={(amount) =>
-                  setDrafts((prev) => ({ ...prev, [`${stat}:${ex.id}`]: { ...draft, amount } }))
-                }
-                onDiff={(diff) =>
-                  setDrafts((prev) => ({ ...prev, [`${stat}:${ex.id}`]: { ...draft, diff } }))
-                }
-              />
-            );
-          })}
-        </div>
         {(() => {
-          const filled = EXERCISES[stat]
-            .map((ex) => {
-              const draft = drafts[`${stat}:${ex.id}`] ?? { amount: '', diff: 'normal' };
-              const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === draft.diff) : null;
-              const rate = load?.rate ?? ex.rate;
-              const pts = floorAwardPoints(exercisePoints(ex, Number(draft.amount) || 0, rate) * mult);
-              if (pts <= 0) return null;
-              return { id: ex.id, amount: Number(draft.amount), rate: ex.loadDifficulty ? rate : undefined, pts };
-            })
-            .filter(Boolean);
+          const filled = STATS.flatMap((s) => {
+            const m = xpMultiplier(player, s);
+            return EXERCISES[s]
+              .map((ex) => filledExercise(s, ex, drafts[`${s}:${ex.id}`] ?? { amount: '', diff: 'normal' }, m))
+              .filter(Boolean);
+          });
+          const batch = filled.length >= 2;
           const total = filled.reduce((sum, row) => sum + row.pts, 0);
+          const submit = (rows) => {
+            const ok = onTrainMany?.(rows.map(({ stat: s, id, amount, rate }) => ({ stat: s, id, amount, rate })));
+            if (!ok) return;
+            setDrafts((prev) => {
+              const next = { ...prev };
+              for (const row of rows) delete next[`${row.stat}:${row.id}`];
+              return next;
+            });
+          };
           return (
-            <button
-              type="button"
-              disabled={total <= 0}
-              onClick={() => {
-                const ok = onTrainBatch?.(
-                  stat,
-                  filled.map(({ id, amount, rate }) => ({ id, amount, rate })),
-                );
-                if (ok) {
-                  setDrafts((prev) => {
-                    const next = { ...prev };
-                    for (const ex of EXERCISES[stat]) delete next[`${stat}:${ex.id}`];
-                    return next;
-                  });
-                }
-              }}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white disabled:opacity-30"
-              style={{ background: color, boxShadow: total > 0 ? `0 0 14px ${color}66` : 'none' }}
-            >
-              <Check size={16} />
-              {total > 0 ? `Записать всё · +${total} pt` : 'Записать всё'}
-            </button>
+            <>
+              {batch && (
+                <button
+                  type="button"
+                  onClick={() => submit(filled)}
+                  className="mb-3 flex w-full flex-col items-center rounded-xl px-3 py-3 text-sm font-bold text-white"
+                  style={{ background: color, boxShadow: `0 0 14px ${color}66` }}
+                >
+                  <span className="flex items-center gap-2">
+                    <Check size={16} />
+                    Подтвердить все · +{total} pt
+                  </span>
+                  <span className="mt-0.5 text-center text-[10px] font-semibold opacity-80">
+                    {filled.map((row) => row.name).join(' · ')}
+                  </span>
+                </button>
+              )}
+              <div className="space-y-2">
+                {EXERCISES[stat].map((ex) => {
+                  const key = `${stat}:${ex.id}`;
+                  const draft = drafts[key] ?? { amount: '', diff: 'normal' };
+                  const row = filledExercise(stat, ex, draft, mult);
+                  return (
+                    <ExerciseRow
+                      key={`${stat}-${ex.id}`}
+                      ex={ex}
+                      color={color}
+                      mult={mult}
+                      amount={draft.amount}
+                      diff={draft.diff}
+                      showCheck={!batch}
+                      onAmount={(amount) =>
+                        setDrafts((prev) => {
+                          const cur = prev[key] ?? { amount: '', diff: 'normal' };
+                          return { ...prev, [key]: { ...cur, amount } };
+                        })
+                      }
+                      onDiff={(diff) =>
+                        setDrafts((prev) => {
+                          const cur = prev[key] ?? { amount: '', diff: 'normal' };
+                          return { ...prev, [key]: { ...cur, diff } };
+                        })
+                      }
+                      onConfirm={() => row && submit([row])}
+                    />
+                  );
+                })}
+              </div>
+            </>
           );
         })()}
 

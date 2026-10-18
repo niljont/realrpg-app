@@ -268,6 +268,7 @@ export function claimReturn(p, now = Date.now()) {
 export function claimBossReward(p, boss, now = Date.now()) {
   const today = dayKey(now);
   if (!boss || boss.day !== today) return { error: 'Босс дня ещё не загружен' };
+  if (isBossSpectator(p?.name)) return { error: 'Этот аккаунт не участвует в бою' };
   if ((boss.hp ?? 1) > 0) return { error: 'Босс ещё жив' };
   if ((boss.mine ?? 0) <= 0) return { error: 'Нужен хотя бы один удар по боссу' };
   if (p?.bossClaimDate === today) return { error: 'Награда босса уже получена' };
@@ -281,6 +282,13 @@ export function claimBossReward(p, boss, now = Date.now()) {
   return { player: checkAchievements(player, events), events };
 }
 
+const BOSS_SPECTATOR_NAMES = ['adminsha', 'админша'];
+
+export function isBossSpectator(username) {
+  const name = String(username || '').trim().toLowerCase();
+  return BOSS_SPECTATOR_NAMES.includes(name);
+}
+
 function localBoss(day, damage, reason = 'train', username = 'Игрок') {
   const key = 'system.dailyBoss.v1';
   let state = null;
@@ -292,7 +300,7 @@ function localBoss(day, damage, reason = 'train', username = 'Игрок') {
   if (!state || state.day !== day || state.maxHp === 1600) {
     state = { day, name: bossTitle(day), maxHp: BOSS_HP, hp: BOSS_HP, strikes: 0, mine: 0, fighters: 0, shared: false, log: [] };
   }
-  const dmg = Math.max(0, Math.round(damage) || 0);
+  const dmg = isBossSpectator(username) ? 0 : Math.max(0, Math.round(damage) || 0);
   if (dmg > 0 && state.hp > 0) {
     state = {
       ...state,
@@ -324,9 +332,10 @@ export async function strikeDailyBoss(day, damage = 0, reason = 'train', usernam
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData?.session) return fallback('Нет входа в аккаунт');
 
+    const spectator = isBossSpectator(username);
     const { data, error } = await supabase.rpc('strike_daily_boss', {
       p_day: day,
-      p_damage: Math.max(0, Math.round(Number(damage) || 0)),
+      p_damage: spectator ? 0 : Math.max(0, Math.round(Number(damage) || 0)),
       p_reason: String(reason || 'train'),
       p_username: String(username || 'Игрок').slice(0, 40),
     });
@@ -341,7 +350,7 @@ export async function strikeDailyBoss(day, damage = 0, reason = 'train', usernam
       hp: body.hp,
       strikes: body.strikes,
       fighters: body.fighters ?? 0,
-      mine: body.mine ?? 0,
+      mine: spectator ? 0 : (body.mine ?? 0),
       shared: true,
       error: '',
       log: Array.isArray(body.log) ? body.log : [],
