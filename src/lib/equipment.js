@@ -1,5 +1,6 @@
 import {
   HP_REGEN_MS,
+  hpRegenPerTick,
   addPalium,
   currentHp,
   damageMultiplier,
@@ -317,7 +318,7 @@ export function getPlayerHp(p) {
   return currentHp(p, playerMaxHp(p));
 }
 
-/** Пассивный реген HP: +1 / 15 мин. */
+/** Пассивный реген HP: 5% максимума каждые 15 мин, минимум 1. */
 export function applyHpRegen(p, now = Date.now()) {
   if (!p) return { player: p, events: [], changed: false };
   // В активной Бреши HP ведёт бой — реген снаружи не крутим.
@@ -336,7 +337,7 @@ export function applyHpRegen(p, now = Date.now()) {
   if (ticks > 0) {
     const lastHpTick = last + ticks * HP_REGEN_MS;
     if (cur < max) {
-      const gain = Math.min(ticks, max - cur);
+      const gain = Math.min(ticks * hpRegenPerTick(max), max - cur);
       cur += gain;
       next = { ...withHp(p, cur, max), lastHpTick };
       if (gain > 0) events.push({ type: 'energy', text: `Реген HP: +${gain}` });

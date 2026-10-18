@@ -70,6 +70,27 @@ export function playerToProfileRow(player, userId) {
   };
 }
 
+function wornGeneratedGear(equipment, generatedGear) {
+  const out = {};
+  const src = generatedGear && typeof generatedGear === 'object' ? generatedGear : {};
+  for (const id of Object.values(equipment ?? {})) {
+    if (id && src[id]) out[id] = src[id];
+  }
+  return out;
+}
+
+/** Только надетые слоты из полного сейва, без сумки и остального прогресса. */
+export function loadoutFromSave(save, fallbackName = 'Игрок') {
+  if (!save || typeof save !== 'object' || !save.equipment || typeof save.equipment !== 'object') return null;
+  return {
+    name: save.name || fallbackName,
+    gender: save.gender === 'female' ? 'female' : 'male',
+    xp: Number(save.xp) || 0,
+    equipment: save.equipment,
+    generatedGear: wornGeneratedGear(save.equipment, save.generatedGear),
+  };
+}
+
 /** Публичный профиль + недельная активность (для чата / рейтинга). */
 export async function fetchPlayerPublicProfile(userId) {
   if (!userId) {
@@ -77,7 +98,7 @@ export async function fetchPlayerPublicProfile(userId) {
   }
 
   const cols =
-    'username,level,strength,endurance,agility,intelligence,willpower,active_title,gender,weekly_activity';
+    'username,level,strength,endurance,agility,intelligence,willpower,active_title,gender,weekly_activity,save_data';
   const { data, error } = await supabase.from('profiles').select(cols).eq('id', userId).maybeSingle();
 
   if (!error && data) {
@@ -94,6 +115,7 @@ export async function fetchPlayerPublicProfile(userId) {
         WIL: data.willpower ?? 1,
       },
       activity: Array.isArray(data.weekly_activity) ? data.weekly_activity : [],
+      loadout: loadoutFromSave(data.save_data, data.username || 'Игрок'),
       error: null,
     };
   }
@@ -118,11 +140,12 @@ export async function fetchPlayerPublicProfile(userId) {
           }
         : null,
       activity: [],
+      loadout: null,
       error: 'Нужна колонка weekly_activity (supabase/add_weekly_activity.sql)',
     };
   }
   if (error) throw error;
-  return { username: '', activity: [], stats: null, error: null };
+  return { username: '', activity: [], stats: null, loadout: null, error: null };
 }
 
 /** @deprecated use fetchPlayerPublicProfile */

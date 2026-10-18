@@ -1,11 +1,97 @@
 import { Skull } from 'lucide-react';
 import { bossReasonLabel, isBossSpectator } from '../lib/daily';
+import { formatPalium, STAT_META } from '../lib/game';
+import {
+  GRIP_LABELS,
+  ITEM_QUALITY,
+  SLOT_LABELS,
+  formatGearBonusLines,
+  formatWeaponDamageLine,
+  qualityColor,
+} from '../lib/equipment';
 
 function formatWhen(iso) {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+export function BossRewardCard({ reward, onClose }) {
+  const item = reward?.item;
+  const color = item ? qualityColor(item) : '#ef4444';
+  const quality = item ? ITEM_QUALITY[item.quality]?.label : '';
+  const dmgLine = item ? formatWeaponDamageLine(item) : null;
+  const bonusLines = item ? formatGearBonusLines(item) : [];
+  const slotLabel = item?.grip
+    ? GRIP_LABELS[item.grip]
+    : item?.slot
+      ? (SLOT_LABELS[item.slot] ?? SLOT_LABELS[`${item.slot}1`] ?? '')
+      : '';
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/75 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div
+        className="system-panel modal-in w-full max-w-sm p-5"
+        style={{ borderColor: `${color}88` }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 text-center font-display text-[11px] tracking-[0.28em] text-zinc-500">ДОБЫЧА БОССА</div>
+        <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-center text-sm font-bold text-amber-200">
+          +{formatPalium(reward?.palium ?? 0)} Палиум
+        </div>
+        {item ? (
+          <div className="mt-3">
+            <div className="flex items-start gap-3">
+              <div
+                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl text-3xl"
+                style={{ background: `${color}22`, boxShadow: `0 0 16px ${color}44` }}
+              >
+                {item.emoji}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-display text-lg leading-tight" style={{ color }}>
+                  {item.name}
+                </div>
+                <div className="mt-1 text-[11px] text-zinc-400">
+                  {[quality, item.itemLevel ? `ур. ${item.itemLevel}` : '', slotLabel].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+            </div>
+            {item.desc && <p className="mt-3 text-sm leading-relaxed text-zinc-300">{item.desc}</p>}
+            {dmgLine && <p className="mt-2 text-[12px] text-zinc-100">{dmgLine}</p>}
+            {bonusLines.map((line) => (
+              <p key={line} className="text-[12px] text-zinc-100">
+                {line}
+              </p>
+            ))}
+            {item.reqLevel || item.req ? (
+              <div className="mt-2 space-y-0.5">
+                {item.reqLevel ? <div className="text-[11px] font-bold text-zinc-300">Требуется уровень {item.reqLevel}</div> : null}
+                {Object.entries(item.req ?? {}).map(([stat, need]) => (
+                  <div key={stat} className="text-[11px] font-bold text-zinc-300">
+                    Требуется {STAT_META[stat]?.label ?? stat} {need}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-3 text-center text-[12px] text-zinc-400">
+            {reward?.full ? 'В сумке нет места, вещь не выдана.' : 'Вещь в этот раз не выпала.'}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-4 w-full rounded-xl py-3 text-sm font-bold text-white"
+          style={{ background: color }}
+        >
+          Забрать
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function BossScreen({ player, boss, onClaimBoss }) {

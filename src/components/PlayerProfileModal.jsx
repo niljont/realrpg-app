@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Footprints, X } from 'lucide-react';
-import { STAT_META, TITLES, titleName } from '../lib/game';
+import { STAT_META, TITLES, levelFromXp, titleName } from '../lib/game';
 import { fetchPlayerPublicProfile } from '../lib/profileSync';
+import {
+  GRIP_LABELS,
+  ITEM_QUALITY,
+  SLOT_LABELS,
+  formatGearBonusLines,
+  formatWeaponDamageLine,
+  getGearBonuses,
+  getGearItem,
+  qualityColor,
+} from '../lib/equipment';
 import StatRadar from './StatRadar';
 
 function formatActivityLine(e) {
@@ -23,6 +33,112 @@ function formatActivityLine(e) {
     color,
     points: e.points != null ? `+${e.points}` : null,
   };
+}
+
+function DollSlot({ label, item, locked, selected, onClick }) {
+  const color = item ? qualityColor(item) : '#3f3f46';
+  return (
+    <button
+      type="button"
+      disabled={!item}
+      onClick={onClick}
+      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border"
+      style={{
+        borderColor: selected ? '#fafafa' : item ? color : '#3f3f46',
+        borderStyle: item ? 'solid' : 'dashed',
+        background: item ? `${color}14` : 'rgb(9 9 11 / 0.8)',
+        boxShadow: item ? `0 0 10px ${color}33` : 'none',
+        opacity: locked ? 0.4 : 1,
+      }}
+      title={item?.name ?? label}
+    >
+      {item ? (
+        <span className="text-lg leading-none">{item.emoji}</span>
+      ) : (
+        <span className="px-0.5 text-center text-[8px] font-bold leading-tight text-zinc-600">{locked ? '⚔️' : label}</span>
+      )}
+    </button>
+  );
+}
+
+function PublicLoadout({ loadout }) {
+  const [slot, setSlot] = useState(null);
+  const itemOf = (id) => getGearItem(loadout.equipment?.[id], loadout);
+  const main = itemOf('mainHand');
+  const off = itemOf('offHand');
+  const twoHandLocked = main?.grip === 'twoHand';
+  const gear = getGearBonuses(loadout);
+  const selected = slot ? itemOf(slot) : null;
+  const { level } = levelFromXp(loadout.xp ?? 0);
+  const wornCount = Object.values(loadout.equipment ?? {}).filter(Boolean).length;
+
+  const pick = (id) => {
+    if (!itemOf(id)) return;
+    setSlot((cur) => (cur === id ? null : id));
+  };
+
+  return (
+    <div className="mb-4">
+      <div className="mb-2 font-display text-[10px] tracking-widest text-zinc-500">ЭКИПИРОВКА</div>
+      {wornCount === 0 ? (
+        <div className="rounded-lg border border-dashed border-zinc-800 py-3 text-center text-[11px] text-zinc-600">Ничего не надето</div>
+      ) : (
+        <>
+          <div className="flex items-stretch justify-center gap-1.5">
+            <div className="flex flex-col gap-1">
+              {['head', 'neck', 'shoulders', 'chest', 'wrists', 'hands', 'waist'].map((id) => (
+                <DollSlot key={id} label={SLOT_LABELS[id]} item={itemOf(id)} selected={slot === id} onClick={() => pick(id)} />
+              ))}
+            </div>
+            <div className="flex min-w-[92px] flex-col items-center justify-between py-1">
+              <div className="flex w-full flex-1 flex-col items-center justify-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900/50 px-2 py-3">
+                <div className="flex h-14 w-10 items-center justify-center rounded-lg border border-zinc-700/80 bg-zinc-950/60 text-xl text-zinc-500">
+                  {loadout.gender === 'female' ? '♀' : '♂'}
+                </div>
+                <div className="text-[9px] tabular-nums text-zinc-600">Ур. {level}</div>
+              </div>
+              <div className="mt-1.5 flex gap-1">
+                <DollSlot label="Оружие" item={main} selected={slot === 'mainHand'} onClick={() => pick('mainHand')} />
+                <DollSlot
+                  label="Левая"
+                  item={twoHandLocked ? null : off}
+                  locked={twoHandLocked}
+                  selected={slot === 'offHand'}
+                  onClick={() => pick('offHand')}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              {['finger1', 'finger2', 'trinket1', 'trinket2', 'legs', 'feet'].map((id) => (
+                <DollSlot key={id} label={SLOT_LABELS[id]} item={itemOf(id)} selected={slot === id} onClick={() => pick(id)} />
+              ))}
+            </div>
+          </div>
+          <div className="mt-2 text-center text-[10px] text-zinc-500">
+            Броня {gear.armor} · HP+{gear.hp} · Крит {Math.round(gear.critChance * 100)}% · Уклон {Math.round(gear.dodgeChance * 100)}%
+          </div>
+          {selected && (
+            <div className="mt-2 rounded-xl border px-3 py-2" style={{ borderColor: `${qualityColor(selected)}66` }}>
+              <div className="font-bold" style={{ color: qualityColor(selected) }}>
+                {selected.emoji} {selected.name}
+              </div>
+              <div className="mt-0.5 text-[10px] text-zinc-500">
+                {[ITEM_QUALITY[selected.quality]?.label, selected.itemLevel ? `ур. ${selected.itemLevel}` : '', selected.grip ? GRIP_LABELS[selected.grip] : SLOT_LABELS[slot]]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </div>
+              {formatWeaponDamageLine(selected) && <div className="mt-1 text-[11px] text-zinc-200">{formatWeaponDamageLine(selected)}</div>}
+              {formatGearBonusLines(selected).map((line) => (
+                <div key={line} className="text-[11px] text-zinc-200">
+                  {line}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function PlayerProfileModal({ userId, fallbackName, onClose }) {
@@ -113,6 +229,13 @@ export default function PlayerProfileModal({ userId, fallbackName, onClose }) {
             <div className="mb-4">
               <div className="mb-1 font-display text-[10px] tracking-widest text-zinc-500">ХАРАКТЕРИСТИКИ</div>
               <StatRadar stats={profile.stats} />
+            </div>
+          )}
+
+          {!loading && profile?.loadout && <PublicLoadout loadout={profile.loadout} />}
+          {!loading && profile && !profile.loadout && !error && (
+            <div className="mb-4 rounded-lg border border-dashed border-zinc-800 py-3 text-center text-[11px] text-zinc-600">
+              Экипировка появится после следующего входа этого игрока.
             </div>
           )}
 

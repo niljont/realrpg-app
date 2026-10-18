@@ -9,7 +9,7 @@ import WorldScreen from './components/WorldScreen';
 import ProfessionsScreen from './components/ProfessionsScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import ChatScreen from './components/ChatScreen';
-import BossScreen from './components/BossScreen';
+import BossScreen, { BossRewardCard } from './components/BossScreen';
 import UnlockOverlay from './components/UnlockOverlay';
 import { useAuth } from './context/AuthContext';
 import {
@@ -137,6 +137,7 @@ export default function App() {
   const [unlockId, setUnlockId] = useState(null);
   const [justUnlocked, setJustUnlocked] = useState(null);
   const [boss, setBoss] = useState(null);
+  const [bossReward, setBossReward] = useState(null);
   const [chatUnread, setChatUnread] = useState(false);
   const syncTimer = useRef(null);
 
@@ -495,7 +496,15 @@ export default function App() {
             />
           )}
           {tab === 'boss' && (
-            <BossScreen player={player} boss={boss} onClaimBoss={() => commit(claimBossReward(player, boss))} />
+            <BossScreen
+              player={player}
+              boss={boss}
+              onClaimBoss={() => {
+                const result = claimBossReward(player, boss);
+                if (!commit(result)) return;
+                if (result.reward) setBossReward(result.reward);
+              }}
+            />
           )}
           {tab === 'chat' && <ChatScreen player={player} onSeen={markChatSeen} />}
           {tab === 'rank' && <LeaderboardScreen player={player} />}
@@ -526,6 +535,8 @@ export default function App() {
       </div>
 
       {modal === 'energy' && <EnergyModal player={player} commit={commit} onClose={() => setModal(null)} />}
+
+      {bossReward && <BossRewardCard reward={bossReward} onClose={() => setBossReward(null)} />}
 
       {unlockId && (
         <UnlockOverlay

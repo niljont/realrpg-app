@@ -57,7 +57,14 @@ export const BASE_AP = 10;
 export const STR_PER_AP = 20;
 export const TRAINING_AP_COST = 0; // Прокачка не тратит энергию
 export const AP_REGEN_MS = 30 * 60 * 1000; // +1 AP / 30 мин
-export const HP_REGEN_MS = 15 * 60 * 1000; // +1 HP / 15 мин
+export const HP_REGEN_MS = 15 * 60 * 1000; // тик регена HP
+export const HP_REGEN_PERCENT = 0.05;
+
+/** Сколько HP прибавляет один тик: 5% максимума, минимум 1. */
+export function hpRegenPerTick(maxHpValue) {
+  const max = Math.max(1, Math.round(Number(maxHpValue) || 1));
+  return Math.max(1, Math.floor(max * HP_REGEN_PERCENT));
+}
 export const PUSHUPS_PER_SET = 15;
 export const PULLUPS_PER_SET = 5;
 export const AP_PER_STRENGTH_SET = 2;

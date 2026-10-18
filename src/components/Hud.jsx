@@ -12,6 +12,7 @@ import {
   isSated,
   levelFromXp,
   msUntilNextAp,
+  hpRegenPerTick,
   msUntilNextHp,
   titleName,
 } from '../lib/game';
@@ -100,11 +101,12 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
     player.ap >= player.maxAp
       ? 'Энергия на максимуме. Пассивный реген приостановлен.'
       : `До +1 AP: ${formatDuration(apLeft)} · реген каждые 30 мин. Утром AP восстанавливается до max.`;
+  const hpTick = hpRegenPerTick(maxHpVal);
   const hpTipBody = player.breach?.active
-    ? 'В Бреши HP общее со статусом. Пассивный реген снаружи боя: +1 / 15 мин.'
+    ? `В Бреши HP общее со статусом. Пассивный реген снаружи боя: +${hpTick} (5%) / 15 мин.`
     : hpVal >= maxHpVal
       ? 'HP на максимуме. Реген приостановлен.'
-      : `До +1 HP: ${formatDuration(hpLeft)} · реген +1 каждые 15 мин. В Бреши тот же запас HP.`;
+      : `До +${hpTick} HP: ${formatDuration(hpLeft)} · 5% максимума каждые 15 мин. В Бреши тот же запас HP.`;
 
   return (
     <>

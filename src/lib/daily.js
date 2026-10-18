@@ -170,15 +170,17 @@ function giveChest(p, { palium, rareChance = 0, uncommonChance = 0.35 }) {
   const events = [];
   let player = { ...p, palium: addPalium(p.palium, palium) };
   events.push({ type: 'gain', text: `+${formatPalium(palium)} Палиум` });
+  const granted = { palium, item: null, full: false };
   if (bagFreeSlots(player) < 1) {
     events.push({ type: 'title', text: 'Сундук не открыт: нет места в сумке' });
-    return { player, events };
+    granted.full = true;
+    return { player, events, granted };
   }
   const roll = Math.random();
   const quality = roll < rareChance ? 'rare' : roll < rareChance + uncommonChance ? 'uncommon' : 'common';
   const level = Math.max(1, levelFromXp(player.xp ?? 0).level);
   const item = rollGeneratedItem(Math.random, level, quality);
-  if (!item) return { player, events };
+  if (!item) return { player, events, granted };
   item.id = `gen_c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
   item.desc = `${item.desc} Награда Системы.`;
   player = {
@@ -186,8 +188,9 @@ function giveChest(p, { palium, rareChance = 0, uncommonChance = 0.35 }) {
     inventory: { ...(player.inventory ?? {}), [item.id]: 1 },
     generatedGear: { ...(player.generatedGear ?? {}), [item.id]: item },
   };
+  granted.item = item;
   events.push({ type: 'title', text: `Сундук: ${item.name}` });
-  return { player, events };
+  return { player, events, granted };
 }
 
 export function contractReady(p) {
@@ -279,7 +282,7 @@ export function claimBossReward(p, boss, now = Date.now()) {
     bossClaimDate: today,
     world: { ...(chest.player.world ?? {}), bossClaims: (p.world?.bossClaims ?? 0) + 1 },
   };
-  return { player: checkAchievements(player, events), events };
+  return { player: checkAchievements(player, events), events, reward: chest.granted };
 }
 
 const BOSS_SPECTATOR_NAMES = ['adminsha', 'админша'];

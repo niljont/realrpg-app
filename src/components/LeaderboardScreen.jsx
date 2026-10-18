@@ -171,7 +171,7 @@ export default function LeaderboardScreen({ player }) {
         </div>
 
         <p className="text-[11px] text-zinc-500">
-          Нажми на игрока — радар статов и активность за 7 дней.
+          Нажми на игрока — экипировка, радар статов и активность за 7 дней.
           {tab === 'overall' && ' Сумма характеристик после синка.'}
           {tab === 'level' && ' Максимальный уровень.'}
           {['STR', 'END', 'AGI', 'INT', 'WIL'].includes(tab) && ` Топ по ${STAT_META[tab].label}.`}
