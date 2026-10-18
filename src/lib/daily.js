@@ -292,8 +292,7 @@ function localBoss(day, damage, reason = 'train', username = 'Игрок') {
   if (!state || state.day !== day || state.maxHp === 1600) {
     state = { day, name: bossTitle(day), maxHp: BOSS_HP, hp: BOSS_HP, strikes: 0, mine: 0, fighters: 0, shared: false, log: [] };
   }
-  const room = Math.max(0, 500 - (state.mine ?? 0));
-  const dmg = Math.min(150, Math.max(0, Math.round(damage) || 0), room);
+  const dmg = Math.max(0, Math.round(damage) || 0);
   if (dmg > 0 && state.hp > 0) {
     state = {
       ...state,

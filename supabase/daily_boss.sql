@@ -117,8 +117,7 @@ begin
   from public.daily_boss_contrib
   where day = p_day and user_id = uid;
 
-  dmg := least(150, greatest(0, coalesce(p_damage, 0)));
-  dmg := least(dmg, greatest(0, 500 - coalesce(dealt, 0)));
+  dmg := greatest(0, coalesce(p_damage, 0));
 
   if dmg > 0 then
     if row.hp > 0 and coalesce(dealt, 0) = 0 and (
