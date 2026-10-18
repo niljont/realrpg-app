@@ -25,9 +25,7 @@ function pointsPreview(raw) {
   return { awarded, label: ` · +${awarded} pt` };
 }
 
-function ExerciseRow({ ex, color, mult, onDone }) {
-  const [amount, setAmount] = useState('');
-  const [diff, setDiff] = useState('normal');
+function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff }) {
   const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === diff) : null;
   const rate = load?.rate ?? ex.rate;
   const raw = exercisePoints(ex, Number(amount) || 0, rate) * mult;
@@ -57,19 +55,11 @@ function ExerciseRow({ ex, color, mult, onDone }) {
           min="0"
           step={ex.step ?? 1}
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => onAmount(e.target.value)}
           placeholder={ex.unit}
           className="w-20 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-right font-bold tabular-nums outline-none"
           style={{ color }}
         />
-        <button
-          disabled={pts <= 0}
-          onClick={() => onDone(ex.id, Number(amount), ex.loadDifficulty ? rate : undefined) && setAmount('')}
-          className="flex min-w-12 items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs font-bold text-white transition active:scale-95 disabled:opacity-25"
-          style={{ background: color, boxShadow: `0 0 12px ${color}77` }}
-        >
-          <Check size={14} />
-        </button>
       </div>
       {ex.loadDifficulty && (
         <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
@@ -79,7 +69,7 @@ function ExerciseRow({ ex, color, mult, onDone }) {
               <button
                 key={d.id}
                 type="button"
-                onClick={() => setDiff(d.id)}
+                onClick={() => onDiff(d.id)}
                 className="rounded-lg border px-1 py-1.5 text-[10px] font-bold transition"
                 style={{
                   borderColor: active ? color : '#3f3f46',
@@ -278,9 +268,10 @@ function CustomQuestRow({ quest, color, mult, today, onComplete, onBlock, onRemo
   );
 }
 
-export default function TrainingScreen({ player, onTrain, onAddQuest, onRemoveQuest, onBlockQuest }) {
+export default function TrainingScreen({ player, onTrain, onTrainBatch, onAddQuest, onRemoveQuest, onBlockQuest }) {
   const [stat, setStat] = useState('STR');
   const [creating, setCreating] = useState(false);
+  const [drafts, setDrafts] = useState({});
   const today = dayKey();
   const todayLog = (player.log ?? []).filter((e) => e.date === today);
   const todayTotals = Object.fromEntries(STATS.map((s) => [s, todayLog.filter((e) => e.stat === s).reduce((a, e) => a + e.points, 0)]));
@@ -335,16 +326,63 @@ export default function TrainingScreen({ player, onTrain, onAddQuest, onRemoveQu
           {mult > 1 && <span className="font-bold text-amber-400">XP ×{mult.toFixed(2)}</span>}
         </div>
         <div className="space-y-2">
-          {EXERCISES[stat].map((ex) => (
-            <ExerciseRow
-              key={`${stat}-${ex.id}`}
-              ex={ex}
-              color={color}
-              mult={mult}
-              onDone={(id, amt, rate) => onTrain(stat, id, amt, rate)}
-            />
-          ))}
+          {EXERCISES[stat].map((ex) => {
+            const draft = drafts[`${stat}:${ex.id}`] ?? { amount: '', diff: 'normal' };
+            return (
+              <ExerciseRow
+                key={`${stat}-${ex.id}`}
+                ex={ex}
+                color={color}
+                mult={mult}
+                amount={draft.amount}
+                diff={draft.diff}
+                onAmount={(amount) =>
+                  setDrafts((prev) => ({ ...prev, [`${stat}:${ex.id}`]: { ...draft, amount } }))
+                }
+                onDiff={(diff) =>
+                  setDrafts((prev) => ({ ...prev, [`${stat}:${ex.id}`]: { ...draft, diff } }))
+                }
+              />
+            );
+          })}
         </div>
+        {(() => {
+          const filled = EXERCISES[stat]
+            .map((ex) => {
+              const draft = drafts[`${stat}:${ex.id}`] ?? { amount: '', diff: 'normal' };
+              const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === draft.diff) : null;
+              const rate = load?.rate ?? ex.rate;
+              const pts = floorAwardPoints(exercisePoints(ex, Number(draft.amount) || 0, rate) * mult);
+              if (pts <= 0) return null;
+              return { id: ex.id, amount: Number(draft.amount), rate: ex.loadDifficulty ? rate : undefined, pts };
+            })
+            .filter(Boolean);
+          const total = filled.reduce((sum, row) => sum + row.pts, 0);
+          return (
+            <button
+              type="button"
+              disabled={total <= 0}
+              onClick={() => {
+                const ok = onTrainBatch?.(
+                  stat,
+                  filled.map(({ id, amount, rate }) => ({ id, amount, rate })),
+                );
+                if (ok) {
+                  setDrafts((prev) => {
+                    const next = { ...prev };
+                    for (const ex of EXERCISES[stat]) delete next[`${stat}:${ex.id}`];
+                    return next;
+                  });
+                }
+              }}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white disabled:opacity-30"
+              style={{ background: color, boxShadow: total > 0 ? `0 0 14px ${color}66` : 'none' }}
+            >
+              <Check size={16} />
+              {total > 0 ? `Записать всё · +${total} pt` : 'Записать всё'}
+            </button>
+          );
+        })()}
 
         {stat === 'WIL' && (
           <div className="mt-4 space-y-2">

@@ -616,13 +616,14 @@ export function unequipSlot(p, slot) {
   };
 }
 
-export function buyGear(p, itemId) {
+export function buyGear(p, itemId, rawAmount = 1) {
   const staticItem = GEAR_ITEMS[itemId] ?? null;
   const offer = (p.vendorStock?.offers ?? []).find((row) => row.id === itemId) ?? null;
   const item = staticItem ?? offer ?? p.generatedGear?.[itemId] ?? null;
   if (!staticItem && !offer) return { error: 'Этой вещи уже нет в лавке' };
   if (!item || (item.buyPrice == null && item.buyPrice !== 0)) return { error: 'Нет в ассортименте' };
-  const price = item.buyPrice ?? 0;
+  const count = staticItem ? Math.max(1, Math.min(99, Math.floor(Number(rawAmount) || 1))) : 1;
+  const price = p3((item.buyPrice ?? 0) * count);
   if ((p.palium ?? 0) + 1e-9 < price) {
     return { error: `Нужно ${formatPalium(price)} Палиум (у вас ${formatPalium(p.palium)})` };
   }
@@ -643,12 +644,12 @@ export function buyGear(p, itemId) {
     player: {
       ...p,
       palium: addPalium(p.palium, -price),
-      inventory: addInv(invOf(p), itemId, 1),
+      inventory: addInv(invOf(p), itemId, count),
       generatedGear,
       vendorStock,
-      world: { ...(p.world ?? {}), bought: (p.world?.bought ?? 0) + 1 },
+      world: { ...(p.world ?? {}), bought: (p.world?.bought ?? 0) + count },
     },
-    events: [{ type: 'title', text: `Куплено: ${item.name} (−${formatPalium(price)} Палиум)` }],
+    events: [{ type: 'title', text: `Куплено: ${count}× ${item.name} (−${formatPalium(price)} Палиум)` }],
   };
 }
 
@@ -805,6 +806,88 @@ export function formatGearBonusLines(item) {
   if (item.trinketShield) lines.push(`Раз в бой: +${item.trinketShield} щита`);
   if (item.blockPerEnd) lines.push(`Блок +(Выносливость × ${item.blockPerEnd})`);
   return lines;
+}
+
+/** Числовые статы для сравнения двух вещей одного слота. */
+export function gearMetrics(item, player) {
+  if (!item || !isGearItem(item)) return [];
+  const stats = player ? getStats(player) : null;
+  const rows = [];
+  if (item.damage) {
+    const scale = item.scaling && stats ? (stats[item.scaling.stat] ?? 0) * (item.scaling.coeff ?? 0) : 0;
+    const min = item.damage.min + scale;
+    const max = item.damage.max + scale;
+    rows.push({
+      id: 'dmg',
+      label: item.damage.type === 'magic' ? 'Маг. урон' : 'Урон',
+      value: (min + max) / 2,
+      text: `${Math.floor(min)}–${Math.floor(max)}`,
+    });
+  }
+  const add = (id, label, value, text) => {
+    if (!value) return;
+    rows.push({ id, label, value, text: text ?? String(value) });
+  };
+  add('armor', 'Броня', item.armor ?? 0);
+  add('hp', 'HP', item.hp ?? 0);
+  if (item.critChance && Math.round(item.critChance * 100) > 0) {
+    add('crit', 'Крит', item.critChance, `${Math.round(item.critChance * 100)}%`);
+  }
+  if (item.dodgeChance && Math.round(item.dodgeChance * 100) > 0) {
+    add('dodge', 'Уклон', item.dodgeChance, `${Math.round(item.dodgeChance * 100)}%`);
+  }
+  if (item.magicDmgMul && Math.round(item.magicDmgMul * 100) > 0) {
+    add('magic', 'Маг. урон', item.magicDmgMul, `${Math.round(item.magicDmgMul * 100)}%`);
+  }
+  add('shield', 'Щит', item.startShield ?? 0);
+  add('phys', 'Физ. урон', item.physFlat ?? 0);
+  add('trinket', 'Щит аксессуара', item.trinketShield ?? 0);
+  add('block', 'Блок', item.blockPerEnd ?? 0);
+  return rows.filter((row) => row.value > 0);
+}
+
+const METRIC_WEIGHT = {
+  dmg: 1,
+  armor: 1.15,
+  hp: 0.28,
+  crit: 90,
+  dodge: 90,
+  magic: 80,
+  shield: 0.35,
+  phys: 4,
+  trinket: 0.4,
+  block: 8,
+};
+
+export function gearPower(item, player) {
+  return gearMetrics(item, player).reduce((sum, row) => sum + row.value * (METRIC_WEIGHT[row.id] ?? 1), 0);
+}
+
+function weakerSlot(player, slotA, slotB) {
+  const a = getGearItem(player.equipment?.[slotA], player);
+  const b = getGearItem(player.equipment?.[slotB], player);
+  if (!a) return slotA;
+  if (!b) return slotB;
+  return gearPower(a, player) <= gearPower(b, player) ? slotA : slotB;
+}
+
+/** Слот, с которым сравнивается вещь из сумки. */
+export function compareSlotFor(item, player) {
+  if (!item || !player || !isGearItem(item)) return null;
+  if (item.grip === 'twoHand' || item.grip === 'oneHand' || item.slot === 'weapon') return 'mainHand';
+  if (item.grip === 'offHand' || item.slot === 'offHand') return 'offHand';
+  if (item.slot === 'finger') return weakerSlot(player, 'finger1', 'finger2');
+  if (item.slot === 'trinket') return weakerSlot(player, 'trinket1', 'trinket2');
+  if (item.slot && EQUIP_SLOTS.includes(item.slot)) return item.slot;
+  return null;
+}
+
+export function isGearUpgrade(item, player) {
+  const slot = compareSlotFor(item, player);
+  if (!slot) return false;
+  const worn = getGearItem(player.equipment?.[slot], player);
+  if (!worn) return true;
+  return gearPower(item, player) > gearPower(worn, player) + 0.25;
 }
 
 /** Список id всей экипировки для EMPTY_INV. */

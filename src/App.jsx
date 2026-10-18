@@ -16,6 +16,7 @@ import {
   applyTimeSystems,
   addCustomQuest,
   applyTraining,
+  applyTrainingBatch,
   blockCustomQuest,
   createPlayer,
   equipTitle,
@@ -442,8 +443,8 @@ export default function App() {
               onNormalMeal={() => run(logNormalMeal)}
               onFastFood={() => run(logFastFood)}
               onSell={(id, amt) => run(sellToGoblin, id, amt)}
-              onBuyGear={(id) => run(buyGear, id)}
-              onBuyConsumable={(id) => run(buyFromGoblin, id)}
+              onBuyGear={(id, n) => run(buyGear, id, n)}
+              onBuyConsumable={(id, n) => run(buyFromGoblin, id, n)}
               onEquipItem={(id, slot) => run(equipItem, id, slot)}
               onUnequipSlot={(slot) => run(unequipSlot, slot)}
               onEquipTitle={(id) => commit(equipTitle(player, id))}
@@ -458,6 +459,7 @@ export default function App() {
             <TrainingScreen
               player={player}
               onTrain={(s, id, amt, rate) => commit(applyTraining(player, s, id, amt, rate))}
+              onTrainBatch={(s, rows) => commit(applyTrainingBatch(player, s, rows))}
               onAddQuest={(data) => commit(sealResult(addCustomQuest(player, data)))}
               onRemoveQuest={(id) => commit(sealResult(removeCustomQuest(player, id)))}
               onBlockQuest={(id) => commit(sealResult(blockCustomQuest(player, id)))}

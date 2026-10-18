@@ -152,12 +152,56 @@ function SortBar({ sorts, sortId, dir, onSortId, onDir }) {
   );
 }
 
+function ownedMarks(player, itemId) {
+  const bag = Math.max(0, Math.floor(Number(player.inventory?.[itemId]) || 0));
+  const worn = Object.values(player.equipment ?? {}).some((id) => id === itemId);
+  return { bag, worn };
+}
+
+function OwnBadges({ bag, worn }) {
+  if (!bag && !worn) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {worn && (
+        <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
+          Надето
+        </span>
+      )}
+      {bag > 0 && (
+        <span className="rounded-full border border-sky-500/40 bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-bold text-sky-300">
+          В сумке ×{bag}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function QtyBox({ value, onChange }) {
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={1}
+      max={99}
+      value={value}
+      onChange={(e) => onChange(Math.max(1, Math.min(99, Math.floor(Number(e.target.value) || 1))))}
+      className="w-14 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-center text-xs font-bold text-zinc-100 outline-none focus:border-neon/50"
+      aria-label="Количество"
+    />
+  );
+}
+
 function GearCard({ item, player, onBuy, flash }) {
   const color = qualityColor(item);
   const reqs = reqStatus(player, item);
-  const canBuy = (player.palium ?? 0) + 1e-9 >= (item.buyPrice ?? 0);
+  const stackable = !item.generated;
+  const [qty, setQty] = useState(1);
+  const count = stackable ? qty : 1;
+  const total = (item.buyPrice ?? 0) * count;
+  const canBuy = (player.palium ?? 0) + 1e-9 >= total;
   const dmgLine = formatWeaponDamageLine(item, player);
   const bonusLines = formatGearBonusLines(item);
+  const owned = ownedMarks(player, item.id);
 
   return (
     <div className="rounded-xl border bg-zinc-900/70 p-3" style={{ borderColor: `${color}44` }}>
@@ -180,6 +224,7 @@ function GearCard({ item, player, onBuy, flash }) {
               ? ` · ${SLOT_LABELS[item.slot] ?? SLOT_LABELS[`${item.slot}1`] ?? item.slot}`
               : ''}
           </div>
+          <OwnBadges bag={owned.bag} worn={owned.worn} />
           {dmgLine && <div className="mt-1 text-[11px] text-zinc-300">{dmgLine}</div>}
           {bonusLines.map((line) => (
             <div key={line} className="text-[11px] text-zinc-300">
@@ -196,23 +241,29 @@ function GearCard({ item, player, onBuy, flash }) {
           </div>
         </div>
       </div>
-      <button
-        type="button"
-        disabled={!canBuy && !flash}
-        onClick={() => onBuy(item.id, item.buyPrice ?? 0)}
-        className={`mt-3 w-full rounded-xl py-2.5 text-xs font-bold text-white disabled:opacity-35 ${
-          flash ? 'shop-buy-flash' : ''
-        }`}
-        style={{ background: flash || canBuy ? '#059669' : '#3f3f46' }}
-      >
-        {flash ? 'Куплено!' : `Купить · ${formatPalium(item.buyPrice)} Палиум`}
-      </button>
+      <div className="mt-3 flex gap-2">
+        {stackable && <QtyBox value={qty} onChange={setQty} />}
+        <button
+          type="button"
+          disabled={!canBuy && !flash}
+          onClick={() => onBuy(item.id, total, count)}
+          className={`flex-1 rounded-xl py-2.5 text-xs font-bold text-white disabled:opacity-35 ${
+            flash ? 'shop-buy-flash' : ''
+          }`}
+          style={{ background: flash || canBuy ? '#059669' : '#3f3f46' }}
+        >
+          {flash ? 'Куплено!' : `Купить ${count > 1 ? `${count}× ` : ''}· ${formatPalium(total)} Палиум`}
+        </button>
+      </div>
     </div>
   );
 }
 
 function ConsumableCard({ offer, player, onBuy, flash }) {
-  const canBuy = (player.palium ?? 0) + 1e-9 >= offer.price;
+  const [qty, setQty] = useState(1);
+  const total = offer.price * qty;
+  const canBuy = (player.palium ?? 0) + 1e-9 >= total;
+  const owned = ownedMarks(player, offer.item);
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
       <div className="flex items-start gap-3">
@@ -220,19 +271,23 @@ function ConsumableCard({ offer, player, onBuy, flash }) {
         <div className="min-w-0 flex-1">
           <div className="font-display text-sm text-zinc-100">{offer.name}</div>
           <div className="mt-1 text-[11px] text-zinc-400">{offer.desc}</div>
+          <OwnBadges bag={owned.bag} worn={owned.worn} />
         </div>
       </div>
-      <button
-        type="button"
-        disabled={!canBuy && !flash}
-        onClick={() => onBuy(offer.item, offer.price)}
-        className={`mt-3 w-full rounded-xl py-2.5 text-xs font-bold text-white disabled:opacity-35 ${
-          flash ? 'shop-buy-flash' : ''
-        }`}
-        style={{ background: flash || canBuy ? '#059669' : '#3f3f46' }}
-      >
-        {flash ? 'Куплено!' : `Купить · ${formatPalium(offer.price)} Палиум`}
-      </button>
+      <div className="mt-3 flex gap-2">
+        <QtyBox value={qty} onChange={setQty} />
+        <button
+          type="button"
+          disabled={!canBuy && !flash}
+          onClick={() => onBuy(offer.item, total, qty)}
+          className={`flex-1 rounded-xl py-2.5 text-xs font-bold text-white disabled:opacity-35 ${
+            flash ? 'shop-buy-flash' : ''
+          }`}
+          style={{ background: flash || canBuy ? '#059669' : '#3f3f46' }}
+        >
+          {flash ? 'Куплено!' : `Купить ${qty > 1 ? `${qty}× ` : ''}· ${formatPalium(total)} Палиум`}
+        </button>
+      </div>
     </div>
   );
 }
@@ -305,13 +360,13 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
     setBalancePulse(true);
   };
 
-  const handleBuyGear = (id, price) => {
-    const ok = onBuyGear?.(id);
+  const handleBuyGear = (id, price, qty = 1) => {
+    const ok = onBuyGear?.(id, qty);
     if (ok) playPurchaseFx(id, price);
   };
 
-  const handleBuyConsumable = (id, price) => {
-    const ok = onBuyConsumable?.(id);
+  const handleBuyConsumable = (id, price, qty = 1) => {
+    const ok = onBuyConsumable?.(id, qty);
     if (ok) playPurchaseFx(id, price);
   };
 

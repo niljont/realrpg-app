@@ -871,22 +871,24 @@ export function sellToGoblin(p, itemId, amount = 1) {
   };
 }
 
-export function buyFromGoblin(p, itemId) {
+export function buyFromGoblin(p, itemId, rawAmount = 1) {
   const offer = SHOP_BUY.find((s) => s.item === itemId);
   if (!offer) return { error: 'Нет в ассортименте' };
-  if ((p.palium ?? 0) + 1e-9 < offer.price) {
-    return { error: `Нужно ${offer.priceLabel} (у вас ${formatMoney(p.palium)})` };
+  const n = Math.max(1, Math.min(99, Math.floor(Number(rawAmount) || 1)));
+  const price = p3(offer.price * n);
+  if ((p.palium ?? 0) + 1e-9 < price) {
+    return { error: `Нужно ${formatMoney(price)} (у вас ${formatMoney(p.palium)})` };
   }
   const have = invCount(p, itemId) > 0;
-  const used = Object.values(p.inventory ?? {}).filter((n) => Number(n) > 0).length;
+  const used = Object.values(p.inventory ?? {}).filter((v) => Number(v) > 0).length;
   if (!have && used >= 32) return { error: 'Инвентарь полон' };
   return {
     player: {
       ...p,
-      palium: addPalium(p.palium, -offer.price),
-      inventory: addItem(p.inventory ?? emptyInventory(), itemId, 1),
-      world: { ...(p.world ?? {}), bought: (p.world?.bought ?? 0) + 1 },
+      palium: addPalium(p.palium, -price),
+      inventory: addItem(p.inventory ?? emptyInventory(), itemId, n),
+      world: { ...(p.world ?? {}), bought: (p.world?.bought ?? 0) + n },
     },
-    events: [{ type: 'title', text: `Куплено: ${offer.name} (−${offer.priceLabel})` }],
+    events: [{ type: 'title', text: `Куплено: ${n}× ${offer.name} (−${formatMoney(price)})` }],
   };
 }

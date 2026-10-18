@@ -1417,6 +1417,33 @@ export function applyTraining(p, stat, exId, amount, rateOverride) {
   };
 }
 
+/** Несколько упражнений одного стата за одну запись. */
+export function applyTrainingBatch(p, stat, rows) {
+  const list = (rows ?? []).filter((row) => Number(row?.amount) > 0);
+  if (!list.length) return { error: 'Введите хотя бы одно упражнение' };
+  let player = p;
+  const events = [];
+  let total = 0;
+  let applied = 0;
+  for (const row of list) {
+    const res = applyTraining(player, stat, row.id, row.amount, row.rate);
+    if (res.error) {
+      events.push({ type: 'error', text: res.error });
+      continue;
+    }
+    player = res.player;
+    events.push(...(res.events ?? []));
+    total += res.daily?.amount ?? 0;
+    applied += 1;
+  }
+  if (!applied) return { error: events[0]?.text || 'Ничего не записано' };
+  return {
+    player,
+    events,
+    daily: total > 0 ? { action: 'train', amount: total } : undefined,
+  };
+}
+
 export function sumPoints(stat, values) {
   return EXERCISES[stat].reduce((acc, ex) => acc + exercisePoints(ex, Number(values[ex.id]) || 0), 0);
 }

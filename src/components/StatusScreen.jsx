@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Backpack, BarChart3, Store, Trophy, X } from 'lucide-react';
+import { Backpack, BarChart3, ChevronUp, Store, Trophy, X } from 'lucide-react';
 import StatRadar from './StatRadar';
 import Modal from './Modal';
 import AchievementsScreen from './AchievementsScreen';
@@ -13,10 +13,13 @@ import {
   SLOT_LABELS,
   formatGearBonusLines,
   formatWeaponDamageLine,
+  gearMetrics,
   getGearBonuses,
   getGearItem,
   isGearItem,
+  isGearUpgrade,
   isWeaponItem,
+  compareSlotFor,
   meetsReq,
   qualityColor,
   reqStatus,
@@ -121,6 +124,54 @@ function PaperDoll({ player, onSlotClick }) {
   );
 }
 
+function GearCompare({ item, player }) {
+  const slot = compareSlotFor(item, player);
+  const worn = slot ? getGearItem(player.equipment?.[slot], player) : null;
+  const slotName = slot ? SLOT_LABELS[slot] ?? slot : 'слот';
+  const bagRows = gearMetrics(item, player);
+  const wornRows = gearMetrics(worn, player);
+  const ids = [...new Set([...wornRows.map((row) => row.id), ...bagRows.map((row) => row.id)])];
+
+  return (
+    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+      <div className="mb-2 text-[10px] font-bold tracking-wider text-zinc-500">
+        Сравнение · {slotName}
+        {item.grip === 'twoHand' ? ' · двуручное снимет левую руку' : ''}
+      </div>
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-x-2 text-[10px]">
+        <div className="font-bold text-zinc-400">Надето</div>
+        <div />
+        <div className="text-right font-bold text-zinc-200">В сумке</div>
+        <div className="col-span-3 mb-1 truncate text-[10px] text-zinc-500">
+          {worn ? worn.name : 'Пусто'}
+        </div>
+      </div>
+      {ids.length === 0 ? (
+        <p className="text-[11px] text-zinc-500">Нет боевых характеристик для сравнения.</p>
+      ) : (
+        <div className="space-y-1">
+          {ids.map((id) => {
+            const left = wornRows.find((row) => row.id === id);
+            const right = bagRows.find((row) => row.id === id);
+            const delta = (right?.value ?? 0) - (left?.value ?? 0);
+            const better = delta > 0.001;
+            const worse = delta < -0.001;
+            return (
+              <div key={id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 text-[11px]">
+                <span className="text-zinc-400">{left?.text ?? '—'}</span>
+                <span className="text-[10px] text-zinc-500">{left?.label ?? right?.label}</span>
+                <span className={`text-right font-bold ${better ? 'text-emerald-400' : worse ? 'text-red-400' : 'text-zinc-200'}`}>
+                  {right?.text ?? '—'}
+                  {better ? ' ↑' : worse ? ' ↓' : ''}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 function ItemTooltip({
   item,
   count,
@@ -140,6 +191,12 @@ function ItemTooltip({
   const reqs = gear ? reqStatus(player, item) : [];
   const canEq = gear && meetsReq(player, item);
   const sellPrice = item.sellPrice;
+  const stack = Math.max(1, Math.floor(Number(count) || 1));
+  const [sellQty, setSellQty] = useState(stack);
+  useEffect(() => {
+    setSellQty(stack);
+  }, [item?.id, stack]);
+  const sellN = Math.max(1, Math.min(stack, Math.floor(Number(sellQty) || 1)));
   const dmgLine = formatWeaponDamageLine(item, player);
   const bonusLines = formatGearBonusLines(item);
 
@@ -192,6 +249,8 @@ function ItemTooltip({
             ))}
           </div>
         )}
+
+        {mode === 'bag' && gear && <GearCompare item={item} player={player} />}
 
         <div className="mt-3 flex flex-col gap-2">
           {mode === 'equipped' && (
@@ -277,15 +336,52 @@ function ItemTooltip({
           )}
 
           {mode === 'bag' && sellPrice != null && (
-            <button
-              type="button"
-              onClick={() => {
-                if (onSell?.(item.id, 1)) onClose();
-              }}
-              className="w-full rounded-xl border border-sky-500/40 bg-sky-500/10 py-3 text-sm font-bold text-sky-300"
-            >
-              Продать за {formatPalium(sellPrice)} Палиума
-            </button>
+            <div className="space-y-2">
+              {stack > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSellQty(Math.max(1, sellN - 1))}
+                    className="h-11 w-11 rounded-xl border border-zinc-700 text-lg font-bold text-zinc-200"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={stack}
+                    value={sellN}
+                    onChange={(e) => setSellQty(Math.max(1, Math.min(stack, Math.floor(Number(e.target.value) || 1))))}
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 text-center text-sm font-bold text-zinc-100 outline-none"
+                    aria-label="Сколько продать"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSellQty(Math.min(stack, sellN + 1))}
+                    className="h-11 w-11 rounded-xl border border-zinc-700 text-lg font-bold text-zinc-200"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSellQty(stack)}
+                    className="h-11 rounded-xl border border-sky-500/40 px-3 text-[11px] font-bold text-sky-300"
+                  >
+                    Все {stack}
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSell?.(item.id, sellN)) onClose();
+                }}
+                className="w-full rounded-xl border border-sky-500/40 bg-sky-500/10 py-3 text-sm font-bold text-sky-300"
+              >
+                Продать {sellN}× за {formatPalium(sellPrice * sellN)} Палиума
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -347,6 +443,7 @@ function InventoryPanel({ player, onEat, onUse, onHealthy, onNormal, onFast, onE
             const { item, count } = slot;
             const color = qualityColor(item);
             const active = selectedId === item.id;
+            const upgrade = isGearUpgrade(item, player);
             return (
               <button
                 key={item.id}
@@ -363,6 +460,11 @@ function InventoryPanel({ player, onEat, onUse, onHealthy, onNormal, onFast, onE
                 aria-label={item.name}
               >
                 {item.emoji}
+                {upgrade && (
+                  <span className="absolute left-0.5 top-0.5 text-emerald-400 drop-shadow-[0_0_4px_rgb(52_211_153)]">
+                    <ChevronUp size={14} strokeWidth={3} />
+                  </span>
+                )}
                 <span className="absolute right-0.5 bottom-0.5 rounded bg-black/70 px-1 font-display text-[9px] tabular-nums text-zinc-100">
                   {count}
                 </span>

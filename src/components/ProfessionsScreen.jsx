@@ -418,7 +418,14 @@ function CraftPanel({ player, profession, onCraft }) {
   );
 }
 
-function ProfessionRow({ icon: Icon, title, skillLabel, color, onClick }) {
+function professionCraftCount(player, professionId) {
+  return CRAFT_RECIPES.filter((recipe) => recipe.profession === professionId).filter((recipe) => {
+    if ((player.ap ?? 0) < recipe.ap) return false;
+    return recipeCostStatus(player, recipe).every((row) => row.ok);
+  }).length;
+}
+
+function ProfessionRow({ icon: Icon, title, skillLabel, color, onClick, readyCount = 0 }) {
   return (
     <button
       type="button"
@@ -438,6 +445,11 @@ function ProfessionRow({ icon: Icon, title, skillLabel, color, onClick }) {
           {skillLabel}
         </div>
       </div>
+      {readyCount > 0 && (
+        <span className="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-[0_0_8px_rgb(16_185_129)]">
+          {readyCount}
+        </span>
+      )}
       <ChevronRight size={18} className="shrink-0 text-zinc-600" />
     </button>
   );
@@ -489,6 +501,7 @@ export default function ProfessionsScreen({
               title={p.title}
               skillLabel={p.skillLabel}
               color={p.color}
+              readyCount={p.id === 'cook' ? 0 : professionCraftCount(player, p.id)}
               onClick={() => setOpen(p.id)}
             />
           ))}

@@ -751,11 +751,22 @@ export function breachCombatEndTurn(p) {
   resolveEnemyTurn(p, session);
 
   if (session.playerHp <= 0) {
-    session.log.push('[СИСТЕМА] Критическая ошибка. Лут утерян.');
+    const keptPalium = Math.round(((Number(session.lootPalium) || 0) / 2) * 1000) / 1000;
+    const keptItems = {};
+    for (const [id, n] of Object.entries(session.lootItems ?? {})) {
+      const keep = Math.ceil(Math.max(0, Number(n) || 0) / 2);
+      if (keep > 0) keptItems[id] = keep;
+    }
+    session.log.push('[СИСТЕМА] Критическая ошибка. Половина лута утеряна.');
     return finishBreach(
-      { ...p, breach: { ...session, lootPalium: 0, lootItems: {}, playerHp: 0 } },
-      { keepLoot: false, cleared: false, defeated: true },
-      [{ type: 'error', text: 'Поражение в Бреши. Лут потерян. HP: 1' }],
+      { ...p, breach: { ...session, lootPalium: keptPalium, lootItems: keptItems, playerHp: 0 } },
+      { keepLoot: true, cleared: false, defeated: true },
+      [
+        {
+          type: 'error',
+          text: `Поражение в Бреши. Сохранена половина лута · ${formatPalium(keptPalium)} Палиум. HP: 1`,
+        },
+      ],
     );
   }
   const max = playerMaxHp(p);
