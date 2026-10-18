@@ -5,6 +5,7 @@ import {
   damageMultiplier,
   formatPalium,
   getStats,
+  levelFromXp,
   maxHp as baseMaxHp,
   statMultiplier,
   STAT_META,
@@ -388,8 +389,9 @@ export function healPlayer(p, amount) {
   };
 }
 
-export function getGearItem(id) {
-  return GEAR_ITEMS[id] ?? null;
+export function getGearItem(id, player) {
+  if (!id) return null;
+  return GEAR_ITEMS[id] ?? player?.generatedGear?.[id] ?? null;
 }
 
 export function isGearItem(item) {
@@ -401,20 +403,39 @@ export function isWeaponItem(item) {
 }
 
 export function meetsReq(player, item) {
+  if (!item) return false;
+  if (item.reqLevel) {
+    const lvl = levelFromXp(player?.xp ?? 0).level;
+    if (lvl < item.reqLevel) return false;
+  }
   const stats = getStats(player);
-  const req = item?.req ?? {};
+  const req = item.req ?? {};
   return Object.entries(req).every(([stat, need]) => (stats[stat] ?? 0) >= need);
 }
 
 export function reqStatus(player, item) {
   const stats = getStats(player);
-  return Object.entries(item?.req ?? {}).map(([stat, need]) => ({
-    stat,
-    need,
-    current: stats[stat] ?? 0,
-    ok: (stats[stat] ?? 0) >= need,
-    label: STAT_META[stat]?.label ?? stat,
-  }));
+  const rows = [];
+  if (item?.reqLevel) {
+    const current = levelFromXp(player?.xp ?? 0).level;
+    rows.push({
+      stat: 'LVL',
+      need: item.reqLevel,
+      current,
+      ok: current >= item.reqLevel,
+      label: 'Уровень',
+    });
+  }
+  for (const [stat, need] of Object.entries(item?.req ?? {})) {
+    rows.push({
+      stat,
+      need,
+      current: stats[stat] ?? 0,
+      ok: (stats[stat] ?? 0) >= need,
+      label: STAT_META[stat]?.label ?? stat,
+    });
+  }
+  return rows;
 }
 
 function invOf(p) {
@@ -463,7 +484,7 @@ export function getGearBonuses(p) {
   let trinketShield = 0;
 
   for (const slot of EQUIP_SLOTS) {
-    const item = getGearItem(eq[slot]);
+    const item = getGearItem(eq[slot], p);
     if (!item) continue;
     armor += item.armor ?? 0;
     hp += item.hp ?? 0;
@@ -528,7 +549,7 @@ export function canEquipTo(item, slot) {
 }
 
 export function equipItem(p, itemId, preferSlot = null) {
-  const item = getGearItem(itemId);
+  const item = getGearItem(itemId, p);
   if (!item) return { error: 'Это нельзя экипировать' };
   if ((p.inventory?.[itemId] ?? 0) < 1) return { error: 'Нет предмета в инвентаре' };
   if (!meetsReq(p, item)) {
@@ -548,12 +569,12 @@ export function equipItem(p, itemId, preferSlot = null) {
     ({ inv, eq } = unequipToBag(inv, eq, 'offHand'));
     eq = { ...eq, mainHand: itemId, offHand: null };
   } else if (item.grip === 'offHand') {
-    const mainItem = getGearItem(eq.mainHand);
+    const mainItem = getGearItem(eq.mainHand, p);
     if (mainItem?.grip === 'twoHand') ({ inv, eq } = unequipToBag(inv, eq, 'mainHand'));
     ({ inv, eq } = unequipToBag(inv, eq, 'offHand'));
     eq = { ...eq, offHand: itemId };
   } else if (item.grip === 'oneHand') {
-    const mainItem = getGearItem(eq.mainHand);
+    const mainItem = getGearItem(eq.mainHand, p);
     if (mainItem?.grip === 'twoHand') {
       ({ inv, eq } = unequipToBag(inv, eq, 'mainHand'));
       ({ inv, eq } = unequipToBag(inv, eq, 'offHand'));
@@ -586,7 +607,7 @@ export function unequipSlot(p, slot) {
     return { error: 'Нет свободного слота в инвентаре' };
   }
   const { inv, eq: nextEq } = unequipToBag(invOf(p), eq, slot);
-  const item = getGearItem(id);
+  const item = getGearItem(id, p);
   const unequipped = { ...p, inventory: inv, equipment: nextEq };
   const max = playerMaxHp(unequipped);
   return {
@@ -596,19 +617,35 @@ export function unequipSlot(p, slot) {
 }
 
 export function buyGear(p, itemId) {
-  const item = getGearItem(itemId);
-  if (!item?.buyPrice && item?.buyPrice !== 0) return { error: 'Нет в ассортименте' };
+  const staticItem = GEAR_ITEMS[itemId] ?? null;
+  const offer = (p.vendorStock?.offers ?? []).find((row) => row.id === itemId) ?? null;
+  const item = staticItem ?? offer ?? p.generatedGear?.[itemId] ?? null;
+  if (!staticItem && !offer) return { error: 'Этой вещи уже нет в лавке' };
+  if (!item || (item.buyPrice == null && item.buyPrice !== 0)) return { error: 'Нет в ассортименте' };
   const price = item.buyPrice ?? 0;
   if ((p.palium ?? 0) + 1e-9 < price) {
     return { error: `Нужно ${formatPalium(price)} Палиум (у вас ${formatPalium(p.palium)})` };
   }
   const have = (p.inventory?.[itemId] ?? 0) > 0;
   if (!have && bagFreeSlots(p) < 1) return { error: 'Инвентарь полон' };
+
+  let generatedGear = p.generatedGear ?? {};
+  let vendorStock = p.vendorStock ?? null;
+  if (offer) {
+    generatedGear = { ...generatedGear, [itemId]: { ...offer } };
+    vendorStock = {
+      ...p.vendorStock,
+      offers: (p.vendorStock?.offers ?? []).filter((row) => row.id !== itemId),
+    };
+  }
+
   return {
     player: {
       ...p,
       palium: addPalium(p.palium, -price),
       inventory: addInv(invOf(p), itemId, 1),
+      generatedGear,
+      vendorStock,
       world: { ...(p.world ?? {}), bought: (p.world?.bought ?? 0) + 1 },
     },
     events: [{ type: 'title', text: `Куплено: ${item.name} (−${formatPalium(price)} Палиум)` }],
@@ -619,17 +656,27 @@ export function buyGear(p, itemId) {
 export const buyWeapon = buyGear;
 
 export function sellInventoryItem(p, itemId, amount = 1) {
-  const item = getGearItem(itemId);
+  const item = getGearItem(itemId, p);
   if (!item) return { error: 'not_weapon' };
   const n = Math.max(1, Math.floor(Number(amount) || 0));
   if ((p.inventory?.[itemId] ?? 0) < n) return { error: 'Недостаточно предметов' };
   const price = item.sellPrice ?? 0;
   const gain = p3(price * n);
+  const inventory = spendInv(invOf(p), itemId, n);
+  let generatedGear = p.generatedGear;
+  if (generatedGear?.[itemId] && (inventory[itemId] ?? 0) <= 0) {
+    const worn = Object.values(p.equipment ?? {}).includes(itemId);
+    if (!worn) {
+      generatedGear = { ...generatedGear };
+      delete generatedGear[itemId];
+    }
+  }
   return {
     player: {
       ...p,
       palium: addPalium(p.palium, gain),
-      inventory: spendInv(invOf(p), itemId, n),
+      inventory,
+      generatedGear,
       world: { ...(p.world ?? {}), sold: (p.world?.sold ?? 0) + n },
     },
     events: [{ type: 'gain', text: `Продано: ${n}× ${item.name} за ${formatPalium(gain)} Палиум` }],
@@ -637,7 +684,7 @@ export function sellInventoryItem(p, itemId, amount = 1) {
 }
 
 export function attackApCost(p) {
-  const main = getGearItem(eqOf(p).mainHand);
+  const main = getGearItem(eqOf(p).mainHand, p);
   if (!main?.damage) return 1;
   if (main.damage.type === 'magic') return 2;
   if (main.grip === 'twoHand') return 2;
@@ -668,8 +715,8 @@ export function rollPlayerAttack(p) {
   const dmgMul = damageMultiplier(p);
   const gear = getGearBonuses(p);
   const eq = eqOf(p);
-  const main = getGearItem(eq.mainHand);
-  const off = getGearItem(eq.offHand);
+  const main = getGearItem(eq.mainHand, p);
+  const off = getGearItem(eq.offHand, p);
   const parts = [];
   let total = 0;
   let anyCrit = false;
@@ -746,9 +793,13 @@ export function formatGearBonusLines(item) {
   const lines = [];
   if (item.armor) lines.push(`Броня +${item.armor}`);
   if (item.hp) lines.push(`HP +${item.hp}`);
-  if (item.critChance) lines.push(`Крит +${Math.round(item.critChance * 100)}%`);
-  if (item.dodgeChance) lines.push(`Уклонение +${Math.round(item.dodgeChance * 100)}%`);
-  if (item.magicDmgMul) lines.push(`Маг. урон +${Math.round(item.magicDmgMul * 100)}%`);
+  if (item.critChance && Math.round(item.critChance * 100) > 0) lines.push(`Крит +${Math.round(item.critChance * 100)}%`);
+  if (item.dodgeChance && Math.round(item.dodgeChance * 100) > 0) {
+    lines.push(`Уклонение +${Math.round(item.dodgeChance * 100)}%`);
+  }
+  if (item.magicDmgMul && Math.round(item.magicDmgMul * 100) > 0) {
+    lines.push(`Маг. урон +${Math.round(item.magicDmgMul * 100)}%`);
+  }
   if (item.startShield) lines.push(`Стартовый щит +${item.startShield}`);
   if (item.physFlat) lines.push(`Физ. урон +${item.physFlat}`);
   if (item.trinketShield) lines.push(`Раз в бой: +${item.trinketShield} щита`);

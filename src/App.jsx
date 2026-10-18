@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dumbbell, Hammer, Map, Medal, MessageCircle, UserRound } from 'lucide-react';
+import { Dumbbell, Hammer, Map, Medal, MessageCircle, Skull, UserRound } from 'lucide-react';
 import AuthScreen from './components/AuthScreen';
 import Hud from './components/Hud';
 import EnergyModal from './components/EnergyModal';
@@ -9,6 +9,7 @@ import WorldScreen from './components/WorldScreen';
 import ProfessionsScreen from './components/ProfessionsScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import ChatScreen from './components/ChatScreen';
+import BossScreen from './components/BossScreen';
 import UnlockOverlay from './components/UnlockOverlay';
 import { useAuth } from './context/AuthContext';
 import {
@@ -20,10 +21,12 @@ import {
   equipTitle,
   loadPlayer,
   removeCustomQuest,
+  changeGender,
   renamePlayer,
   savePlayer,
   sealResult,
   stampPlayer,
+  dayKey,
 } from './lib/game';
 import {
   fetchProfile,
@@ -34,7 +37,6 @@ import {
   addCustomRecipe,
   archiveCustomRecipe,
   cookCustomRecipe,
-  craftCheatmealScroll,
   editCustomRecipe,
   eatDish,
   gatherNode,
@@ -43,10 +45,13 @@ import {
   logNormalMeal,
   buyFromGoblin,
   sellToGoblin,
-  studyLanguage,
   useInventoryItem,
 } from './lib/world';
+import { craftRecipe } from './lib/crafting';
 import { applyHpRegen, buyGear, equipItem, unequipSlot } from './lib/equipment';
+import { ensureVendorStock } from './lib/loot';
+import { fetchChatMessages, readChatSeen, subscribeChat, writeChatSeen } from './lib/chat';
+import { applyDailyProgress, claimBossReward, claimContract, claimReturn, ensureDaily, strikeDailyBoss } from './lib/daily';
 import {
   breachCombatContinue,
   breachCombatDefend,
@@ -86,6 +91,17 @@ function applyWorldSystems(p) {
     changed = true;
     events.push({ type: 'gain', text: 'Радар Брешей обновлён' });
   }
+  const vendor = ensureVendorStock(player);
+  if (vendor.changed) {
+    player = vendor.player;
+    changed = true;
+  }
+  const daily = ensureDaily(player);
+  if (daily.changed) {
+    player = daily.player;
+    changed = true;
+    events.push(...(daily.events ?? []));
+  }
   return { player, events, changed };
 }
 
@@ -94,6 +110,7 @@ const TABS = [
   { id: 'training', label: 'Прокачка', Icon: Dumbbell },
   { id: 'world', label: 'Мир', Icon: Map },
   { id: 'professions', label: 'Профы', Icon: Hammer },
+  { id: 'boss', label: 'Босс', Icon: Skull },
   { id: 'chat', label: 'Чат', Icon: MessageCircle },
   { id: 'rank', label: 'Рейтинг', Icon: Medal },
 ];
@@ -118,6 +135,8 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   const [unlockId, setUnlockId] = useState(null);
   const [justUnlocked, setJustUnlocked] = useState(null);
+  const [boss, setBoss] = useState(null);
+  const [chatUnread, setChatUnread] = useState(false);
   const syncTimer = useRef(null);
 
   const notify = useCallback((events) => {
@@ -140,8 +159,20 @@ export default function App() {
         notify([{ type: 'error', text: result.error }]);
         return false;
       }
-      setPlayer(result.player);
-      notify(result.events ?? []);
+      let next = result.player;
+      const events = [...(result.events ?? [])];
+      if (result.daily) {
+        const tracked = applyDailyProgress(next, result.daily);
+        next = tracked.player;
+        events.push(...(tracked.events ?? []));
+        if (tracked.bossDamage > 0) {
+          strikeDailyBoss(dayKey(), tracked.bossDamage, result.daily?.action || 'train', next.name).then((state) => {
+            if (state) setBoss(state);
+          });
+        }
+      }
+      setPlayer(next);
+      if (events.length) notify(events);
       return true;
     },
     [notify],
@@ -243,6 +274,60 @@ export default function App() {
 
   const run = useCallback((fn, ...args) => commit(sealResult(fn(player, ...args))), [commit, player]);
 
+  useEffect(() => {
+    if (!player) return undefined;
+    let cancel = false;
+    const pull = () => {
+      strikeDailyBoss(dayKey(), 0).then((state) => {
+        if (!cancel && state) setBoss(state);
+      });
+    };
+    pull();
+    const id = setInterval(pull, tab === 'boss' ? 8000 : 20000);
+    return () => {
+      cancel = true;
+      clearInterval(id);
+    };
+  }, [Boolean(player), tab]);
+
+  const markChatSeen = useCallback(
+    (stamp) => {
+      if (!user?.id || !stamp) return;
+      writeChatSeen(user.id, stamp);
+      setChatUnread(false);
+    },
+    [user?.id],
+  );
+
+  useEffect(() => {
+    if (!user?.id || tab === 'chat') return undefined;
+    let cancel = false;
+    const check = async () => {
+      try {
+        const res = await fetchChatMessages(30);
+        const seen = readChatSeen(user.id);
+        const fresh = (res.messages ?? []).some(
+          (m) => m.user_id !== user.id && m.created_at && (!seen || m.created_at > seen),
+        );
+        if (!cancel) setChatUnread(fresh);
+      } catch {
+        /* чат может быть недоступен */
+      }
+    };
+    check();
+    const poll = setInterval(check, 8000);
+    const unsub = subscribeChat((row) => {
+      if (!row || row.user_id === user.id) return;
+      const seen = readChatSeen(user.id);
+      if (!seen || (row.created_at && row.created_at > seen)) setChatUnread(true);
+    });
+    return () => {
+      cancel = true;
+      clearInterval(poll);
+      unsub?.();
+    };
+  }, [user?.id, tab]);
+
   const refreshRadar = useCallback(() => {
     setPlayer((prev) => {
       if (!prev) return prev;
@@ -303,6 +388,18 @@ export default function App() {
               setPlayer(fresh);
               await syncPlayerToCloud(stampPlayer(fresh));
             }}
+            onChangeGender={async (gender) => {
+              const result = changeGender(player, gender);
+              if (result.error) return { error: result.error };
+              const next = stampPlayer(result.player);
+              setPlayer(next);
+              notify(result.events ?? []);
+              const sync = await syncPlayerToCloud(next);
+              if (sync && sync.ok === false) {
+                return { error: sync.error || 'Не удалось сохранить пол в облаке' };
+              }
+              return { ok: true };
+            }}
             onRename={async (newName) => {
               const result = renamePlayer(player, newName);
               if (result.error) return { error: result.error };
@@ -353,6 +450,8 @@ export default function App() {
               justUnlocked={justUnlocked}
               openRequest={statusOpenRequest}
               onOpenRequestHandled={() => setStatusOpenRequest(null)}
+              onClaimContract={() => commit(claimContract(player))}
+              onClaimReturn={() => commit(claimReturn(player))}
             />
           )}
           {tab === 'training' && (
@@ -387,11 +486,16 @@ export default function App() {
               onAddRecipe={(data) => run(addCustomRecipe, data)}
               onEditRecipe={(id, data) => run(editCustomRecipe, id, data)}
               onArchiveRecipe={(id, archived) => run(archiveCustomRecipe, id, archived)}
-              onStudy={(mins) => run(studyLanguage, mins)}
-              onCraftScroll={() => run(craftCheatmealScroll)}
+              onCraft={(id) => {
+                const result = sealResult(craftRecipe(player, id));
+                return commit(result) ? result.crafted ?? null : null;
+              }}
             />
           )}
-          {tab === 'chat' && <ChatScreen player={player} />}
+          {tab === 'boss' && (
+            <BossScreen player={player} boss={boss} onClaimBoss={() => commit(claimBossReward(player, boss))} />
+          )}
+          {tab === 'chat' && <ChatScreen player={player} onSeen={markChatSeen} />}
           {tab === 'rank' && <LeaderboardScreen player={player} />}
         </main>
 
@@ -405,7 +509,12 @@ export default function App() {
                   onClick={() => setTab(id)}
                   className={`flex min-w-[3.25rem] flex-1 flex-col items-center gap-0.5 py-2 text-[8px] font-bold tracking-wider transition ${active ? 'text-neon' : 'text-zinc-500'}`}
                 >
-                  <Icon size={16} style={{ filter: active ? 'drop-shadow(0 0 6px #22d3ee)' : 'none' }} />
+                  <span className="relative">
+                    <Icon size={16} style={{ filter: active ? 'drop-shadow(0 0 6px #22d3ee)' : 'none' }} />
+                    {id === 'chat' && chatUnread && (
+                      <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full border border-void bg-red-500 shadow-[0_0_6px_#ef4444]" />
+                    )}
+                  </span>
                   {label}
                 </button>
               );

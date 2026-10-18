@@ -7,6 +7,7 @@ import {
   achievementProgress,
   achievementTrackLabel,
   formatAmount,
+  isTierVisible,
   isTitleUnlocked,
   titleName,
 } from '../lib/game';
@@ -32,7 +33,9 @@ function Segmented({ value, onChange, options }) {
 function TitlesTab({ player, onEquip }) {
   return (
     <div className="space-y-2">
-      {Object.entries(TITLES).map(([id, t]) => {
+      {Object.entries(TITLES)
+        .filter(([, t]) => isTierVisible(player, t))
+        .map(([id, t]) => {
         const owned = isTitleUnlocked(player, id);
         const active = player.activeTitle === id;
         return (
@@ -95,7 +98,7 @@ function TitlesTab({ player, onEquip }) {
 function AchievementsTab({ player, justUnlocked }) {
   return (
     <div className="space-y-2">
-      {ACHIEVEMENTS.map((a) => {
+      {ACHIEVEMENTS.filter((a) => isTierVisible(player, a)).map((a) => {
         const cur = achievementProgress(player, a);
         const done = player.achievements.includes(a.id);
         const pct = (cur / a.goal) * 100;

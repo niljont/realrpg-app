@@ -21,7 +21,8 @@ import {
   qualityColor,
   reqStatus,
 } from '../lib/equipment';
-import { ITEMS, invCount } from '../lib/world';
+import { ITEMS, invCount, listInventory } from '../lib/world';
+import DailyBoard from './DailyBoard';
 
 function EquipSlot({ label, item, locked, onClick }) {
   const color = item ? qualityColor(item) : '#3f3f46';
@@ -53,7 +54,7 @@ function EquipSlot({ label, item, locked, onClick }) {
 }
 
 function slotItem(player, slot) {
-  return getGearItem(player?.equipment?.[slot]);
+  return getGearItem(player?.equipment?.[slot], player);
 }
 
 function PaperDoll({ player, onSlotClick }) {
@@ -162,7 +163,7 @@ function ItemTooltip({
             </div>
             <div className="mt-0.5 text-[11px] text-zinc-500">
               {gear
-                ? `${ITEM_QUALITY[item.quality]?.label ?? ''}${item.grip ? ` · ${GRIP_LABELS[item.grip]}` : ''}`
+                ? `${ITEM_QUALITY[item.quality]?.label ?? ''}${item.itemLevel ? ` · ур. ${item.itemLevel}` : ''}${item.grip ? ` · ${GRIP_LABELS[item.grip]}` : ''}`
                 : `В инвентаре: ×${count}`}
               {gear && mode === 'bag' ? ` · ×${count}` : ''}
             </div>
@@ -296,13 +297,13 @@ function InventoryPanel({ player, onEat, onUse, onHealthy, onNormal, onFast, onE
   const [selectedId, setSelectedId] = useState(null);
   const [equippedSlot, setEquippedSlot] = useState(null);
 
-  const owned = Object.values(ITEMS)
-    .map((item) => ({ item, count: invCount(player, item.id) }))
-    .filter((x) => x.count > 0);
+  const owned = listInventory(player);
   const bagSlots = Array.from({ length: BAG_SLOT_COUNT }, (_, i) => owned[i] ?? null);
 
-  const bagItem = selectedId ? ITEMS[selectedId] : null;
-  const eqItem = equippedSlot ? getGearItem(player.equipment?.[equippedSlot]) : null;
+  const bagItem = selectedId
+    ? (ITEMS[selectedId] ?? player.generatedGear?.[selectedId] ?? null)
+    : null;
+  const eqItem = equippedSlot ? getGearItem(player.equipment?.[equippedSlot], player) : null;
 
   return (
     <div className="space-y-4">
@@ -417,6 +418,8 @@ export default function StatusScreen({
   titlesInitialTab = 'titles',
   openRequest,
   onOpenRequestHandled,
+  onClaimContract,
+  onClaimReturn,
 }) {
   const stats = getStats(player);
   const [panel, setPanel] = useState(null);
@@ -438,6 +441,11 @@ export default function StatusScreen({
 
   return (
     <div className="space-y-4">
+      <DailyBoard
+        player={player}
+        onClaimContract={onClaimContract}
+        onClaimReturn={onClaimReturn}
+      />
       <section className="system-panel grid grid-cols-2 gap-2 p-3">
         <button
           type="button"

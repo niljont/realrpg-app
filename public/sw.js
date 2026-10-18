@@ -1,4 +1,4 @@
-const CACHE = 'system-rpg-v3';
+const CACHE = 'system-rpg-v4';
 const SHELL = ['/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg'];
 
 self.addEventListener('install', (event) => {

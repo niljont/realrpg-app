@@ -2,26 +2,40 @@ import { useEffect, useState } from 'react';
 import {
   Archive,
   ArchiveRestore,
+  Anvil,
   ChefHat,
   ChevronRight,
-  Feather,
+  FlaskConical,
+  Gem,
   Hammer,
   Pencil,
-  Scroll,
+  Scissors,
+  Shirt,
+  Zap,
 } from 'lucide-react';
 import Modal from './Modal';
 import {
-  ITEMS,
-  INSCRIPTION_BLOCK_MIN,
-  INSCRIPTION_XP_PER_BLOCK,
   MASTERY_TIERS,
-  SCROLL_HERBS_REQ,
-  SCROLL_SKILL_REQ,
-  canAfford,
-  inkCostForScroll,
   masteryXpFactor,
   recipeMastery,
+  ITEMS,
 } from '../lib/world';
+import {
+  CRAFT_PROFESSIONS,
+  CRAFT_RECIPES,
+  craftRank,
+  craftSkillOf,
+  recipeCostStatus,
+} from '../lib/crafting';
+import { STAT_META } from '../lib/game';
+import {
+  GRIP_LABELS,
+  ITEM_QUALITY,
+  SLOT_LABELS,
+  formatGearBonusLines,
+  formatWeaponDamageLine,
+  qualityColor,
+} from '../lib/equipment';
 
 function formatSkill(n) {
   const v = Number(n) || 0;
@@ -261,57 +275,145 @@ function CookingPanel({ player, onCook, onAddRecipe, onEditRecipe, onArchiveReci
   );
 }
 
-function InscriptionPanel({ player, onStudy, onCraft }) {
-  const [mins, setMins] = useState('15');
-  const skill = player.inscriptionXp ?? 0;
-  const inkNeed = inkCostForScroll(player);
-  const canCraft = skill >= SCROLL_SKILL_REQ && canAfford(player, { wild_herbs: SCROLL_HERBS_REQ, magic_ink: inkNeed });
-  const blocks = Math.floor((Number(mins) || 0) / INSCRIPTION_BLOCK_MIN);
+const CRAFT_ICONS = {
+  smith: Anvil,
+  leather: Scissors,
+  tailor: Shirt,
+  alchemy: FlaskConical,
+  jewel: Gem,
+};
+
+function CraftResultCard({ item, onClose }) {
+  const color = qualityColor(item);
+  const quality = ITEM_QUALITY[item.quality]?.label;
+  const dmgLine = formatWeaponDamageLine(item);
+  const bonusLines = formatGearBonusLines(item);
+  const slotLabel = item.grip
+    ? GRIP_LABELS[item.grip]
+    : item.slot
+      ? (SLOT_LABELS[item.slot] ?? SLOT_LABELS[`${item.slot}1`] ?? '')
+      : '';
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/75 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div
+        className="system-panel modal-in w-full max-w-sm p-5"
+        style={{ borderColor: `${color}88` }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 text-center font-display text-[11px] tracking-[0.28em] text-zinc-500">СОЗДАНО</div>
+        <div className="flex items-start gap-3">
+          <div
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl text-3xl"
+            style={{ background: `${color}22`, boxShadow: `0 0 16px ${color}44` }}
+          >
+            {item.emoji}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-lg leading-tight" style={{ color }}>
+              {item.name}
+            </div>
+            <div className="mt-1 text-[11px] text-zinc-400">
+              {[quality, item.itemLevel ? `ур. ${item.itemLevel}` : '', slotLabel].filter(Boolean).join(' · ')}
+            </div>
+          </div>
+        </div>
+        {item.desc && <p className="mt-3 text-sm leading-relaxed text-zinc-300">{item.desc}</p>}
+        {dmgLine && <p className="mt-2 text-[12px] text-zinc-100">{dmgLine}</p>}
+        {bonusLines.map((line) => (
+          <p key={line} className="text-[12px] text-zinc-100">
+            {line}
+          </p>
+        ))}
+        {item.reqLevel || item.req ? (
+          <div className="mt-2 space-y-0.5">
+            {item.reqLevel ? <div className="text-[11px] font-bold text-zinc-300">Требуется уровень {item.reqLevel}</div> : null}
+            {Object.entries(item.req ?? {}).map(([stat, need]) => (
+              <div key={stat} className="text-[11px] font-bold text-zinc-300">
+                Требуется {STAT_META[stat]?.label ?? stat} {need}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-4 w-full rounded-xl py-3 text-sm font-bold text-white"
+          style={{ background: color }}
+        >
+          Забрать
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CraftPanel({ player, profession, onCraft }) {
+  const [drop, setDrop] = useState(null);
+  const skill = craftSkillOf(player, profession.id);
+  const recipes = CRAFT_RECIPES.filter((recipe) => recipe.profession === profession.id);
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-zinc-500">
-        Каждые {INSCRIPTION_BLOCK_MIN} мин → +{INSCRIPTION_XP_PER_BLOCK} навыка и +1 {ITEMS.magic_ink.name}.
-      </p>
-      <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
-        <div className="flex justify-between text-xs">
-          <span className="text-zinc-400">Навык Начертания</span>
-          <span className="font-display text-violet-300">
-            {skill} / {SCROLL_SKILL_REQ}
+      <div className="rounded-xl border bg-zinc-900/70 p-3" style={{ borderColor: `${profession.color}55` }}>
+        <div className="flex items-center justify-between gap-2 text-xs">
+          <span className="text-zinc-400">Навык</span>
+          <span className="font-display" style={{ color: profession.color }}>
+            {skill} · {craftRank(skill)}
           </span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800">
-          <div className="h-full bg-violet-500" style={{ width: `${Math.min(100, (skill / SCROLL_SKILL_REQ) * 100)}%` }} />
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <input
-          type="number"
-          min={INSCRIPTION_BLOCK_MIN}
-          step={INSCRIPTION_BLOCK_MIN}
-          value={mins}
-          onChange={(e) => setMins(e.target.value)}
-          className="flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 font-bold text-violet-300 outline-none"
-        />
-        <button
-          disabled={blocks < 1}
-          onClick={() => onStudy(mins) && setMins('15')}
-          className="rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-30"
-        >
-          Изучить
-        </button>
-      </div>
-      <div className="rounded-xl border border-amber-500/30 bg-zinc-900/70 p-3">
-        <div className="flex items-center gap-2 font-display text-sm text-amber-300">
-          <Scroll size={16} /> Свиток Читмила
-        </div>
-        <p className="mt-1 text-[11px] text-zinc-500">
-          {SCROLL_HERBS_REQ} трав + {inkNeed} чернил{inkNeed < 10 ? ' (Хранитель −2)' : ''} + навык ≥ {SCROLL_SKILL_REQ}
+        <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+          {profession.id === 'alchemy'
+            ? 'Зелья и камни получаются сразу. Оружие мага случайное: чем выше навык, тем чаще зелёное, синее и фиолетовое. Крафт тратит энергию.'
+            : `${profession.blurb} Крафт тратит энергию. Чем выше навык, тем чаще зелёные, синие и фиолетовые вещи вашего уровня.`}
         </p>
-        <button disabled={!canCraft} onClick={onCraft} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 py-2.5 text-xs font-bold text-white disabled:opacity-30">
-          <Feather size={14} /> Создать свиток
-        </button>
       </div>
+      {recipes.map((recipe) => {
+        const costs = recipeCostStatus(player, recipe);
+        const enoughAp = (player.ap ?? 0) >= recipe.ap;
+        const enoughMats = costs.every((row) => row.ok);
+        return (
+          <div key={recipe.id} className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
+            <div className="font-display text-sm text-zinc-100">{recipe.name}</div>
+            <div className="mt-1 text-[11px] text-zinc-500">{recipe.blurb}</div>
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+              <span
+                className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-bold ${
+                  enoughAp ? 'border-blue-500/30 bg-blue-500/10 text-blue-300' : 'border-red-500/40 text-red-400'
+                }`}
+              >
+                <Zap size={10} /> {recipe.ap} AP
+              </span>
+              {costs.map((row) => {
+                const item = ITEMS[row.id];
+                return (
+                  <span
+                    key={row.id}
+                    className={`rounded border px-1.5 py-0.5 font-bold ${
+                      row.ok ? 'border-zinc-700 text-zinc-300' : 'border-red-500/40 text-red-400'
+                    }`}
+                  >
+                    {item?.emoji} {item?.name ?? row.id} {row.have}/{row.need}
+                  </span>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              disabled={!enoughAp || !enoughMats}
+              onClick={() => {
+                const item = onCraft(recipe.id);
+                if (item) setDrop(item);
+              }}
+              className="mt-3 w-full rounded-lg py-2.5 text-xs font-bold text-white disabled:opacity-35"
+              style={{ background: profession.color }}
+            >
+              Создать
+            </button>
+          </div>
+        );
+      })}
+      {drop && <CraftResultCard item={drop} onClose={() => setDrop(null)} />}
     </div>
   );
 }
@@ -347,8 +449,7 @@ export default function ProfessionsScreen({
   onAddRecipe,
   onEditRecipe,
   onArchiveRecipe,
-  onStudy,
-  onCraftScroll,
+  onCraft,
 }) {
   const [open, setOpen] = useState(null);
   const activeRecipes = (player.customRecipes ?? []).filter((r) => !r.archived).length;
@@ -361,13 +462,13 @@ export default function ProfessionsScreen({
       color: '#f97316',
       skillLabel: `Ур. навыка ${formatSkill(player.cookingSkill)} · рецептов ${activeRecipes}`,
     },
-    {
-      id: 'inscribe',
-      title: 'Начертание',
-      Icon: Feather,
-      color: '#a855f7',
-      skillLabel: `Ур. навыка ${player.inscriptionXp ?? 0}`,
-    },
+    ...CRAFT_PROFESSIONS.map((profession) => ({
+      id: profession.id,
+      title: profession.title,
+      Icon: CRAFT_ICONS[profession.id] ?? Hammer,
+      color: profession.color,
+      skillLabel: `Навык ${craftSkillOf(player, profession.id)} · ${craftRank(craftSkillOf(player, profession.id))}`,
+    })),
   ];
 
   const current = professions.find((p) => p.id === open);
@@ -405,7 +506,13 @@ export default function ProfessionsScreen({
               onArchiveRecipe={onArchiveRecipe}
             />
           )}
-          {open === 'inscribe' && <InscriptionPanel player={player} onStudy={onStudy} onCraft={onCraftScroll} />}
+          {CRAFT_PROFESSIONS.some((profession) => profession.id === open) && (
+            <CraftPanel
+              player={player}
+              profession={CRAFT_PROFESSIONS.find((profession) => profession.id === open)}
+              onCraft={onCraft}
+            />
+          )}
         </Modal>
       )}
     </div>

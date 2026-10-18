@@ -14,7 +14,7 @@ function msgTitle(msg) {
   };
 }
 
-export default function ChatScreen({ player }) {
+export default function ChatScreen({ player, onSeen }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
@@ -66,6 +66,11 @@ export default function ChatScreen({ player }) {
   useEffect(() => {
     scrollBottom(messages.length > 0);
   }, [messages.length, scrollBottom]);
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    onSeen?.(last?.created_at || '1970-01-01T00:00:00.000Z');
+  }, [messages, onSeen]);
 
   const onSend = async () => {
     if (!user?.id || sending) return;

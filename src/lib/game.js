@@ -172,6 +172,306 @@ export const TITLES = {
     track: 'chess',
     tier: 1,
   },
+  walker: {
+    names: { male: 'Следопыт троп', female: 'Следопытка троп' },
+    color: '#2dd4bf',
+    bonus: '+3% к XP Выносливости',
+    req: 'За 20 000 шагов',
+    effect: { xp: { END: 0.03 } },
+    achievement: 'steps20k',
+    track: 'steps',
+    tier: 1,
+  },
+  walker_ii: {
+    names: { male: 'Властелин троп', female: 'Властелинша троп' },
+    color: '#5eead4',
+    bonus: '+6% к XP Выносливости',
+    req: 'За 100 000 шагов',
+    effect: { xp: { END: 0.06 } },
+    achievement: 'steps100k',
+    track: 'steps',
+    tier: 2,
+  },
+  contractor: {
+    names: { male: 'Порученец Системы', female: 'Порученка Системы' },
+    color: '#c084fc',
+    bonus: '+3% к XP Воли',
+    req: 'Закрыть 7 ежедневных контрактов',
+    effect: { xp: { WIL: 0.03 } },
+    achievement: 'contracts7',
+    track: 'contracts',
+    tier: 1,
+  },
+  contractor_ii: {
+    names: { male: 'Архивариус контрактов', female: 'Архивариус контрактов' },
+    color: '#d8b4fe',
+    bonus: '+6% к XP Воли',
+    req: 'Закрыть 30 ежедневных контрактов',
+    effect: { xp: { WIL: 0.06 } },
+    achievement: 'contracts30',
+    track: 'contracts',
+    tier: 2,
+  },
+  attendant: {
+    names: { male: 'Непропустивший', female: 'Непропустившая' },
+    color: '#fb7185',
+    bonus: '+4 Max HP',
+    req: 'Серия явки 7 дней',
+    effect: { hp: 4 },
+    achievement: 'streak7',
+    track: 'streak',
+    tier: 1,
+  },
+  attendant_ii: {
+    names: { male: 'Железная явка', female: 'Железная явка' },
+    color: '#fda4af',
+    bonus: '+10 Max HP',
+    req: 'Серия явки 21 день',
+    effect: { hp: 10 },
+    achievement: 'streak21',
+    track: 'streak',
+    tier: 2,
+  },
+  slayer: {
+    names: { male: 'Охотник дня', female: 'Охотница дня' },
+    color: '#ef4444',
+    bonus: '+3% к XP Силы',
+    req: 'Забрать добычу босса 1 раз',
+    effect: { xp: { STR: 0.03 } },
+    achievement: 'boss1',
+    track: 'boss',
+    tier: 1,
+  },
+  slayer_ii: {
+    names: { male: 'Палач дня', female: 'Палач дня' },
+    color: '#f87171',
+    bonus: '+6% к XP Силы',
+    req: 'Забрать добычу босса 7 раз',
+    effect: { xp: { STR: 0.06 } },
+    achievement: 'boss7',
+    track: 'boss',
+    tier: 2,
+  },
+  artisan: {
+    names: { male: 'Ремесленник Системы', female: 'Ремесленница Системы' },
+    color: '#f59e0b',
+    bonus: '+2% XP ко всем статам',
+    req: 'Создать 10 предметов',
+    effect: { xpAll: 0.02 },
+    achievement: 'craft10',
+    track: 'craft',
+    tier: 1,
+  },
+  artisan_ii: {
+    names: { male: 'Мастер гильдии', female: 'Мастерица гильдии' },
+    color: '#fbbf24',
+    bonus: '+4% XP ко всем статам',
+    req: 'Создать 40 предметов',
+    effect: { xpAll: 0.04 },
+    achievement: 'craft40',
+    track: 'craft',
+    tier: 2,
+  },
+  squatter: {
+    names: { male: 'Каменные ноги', female: 'Каменные ноги' },
+    color: '#ef4444',
+    bonus: '+3% к XP Силы',
+    req: 'За 400 приседаний',
+    effect: { xp: { STR: 0.03 } },
+    achievement: 'legsquats400',
+    track: 'legsquats',
+    tier: 1,
+  },
+  squatter_ii: {
+    names: { male: 'Опора Системы', female: 'Опора Системы' },
+    color: '#f87171',
+    bonus: '+6% к XP Силы',
+    req: 'За 2 000 приседаний',
+    effect: { xp: { STR: 0.06 } },
+    achievement: 'legsquats2000',
+    track: 'legsquats',
+    tier: 2,
+  },
+  core: {
+    names: { male: 'Стальной кор', female: 'Стальной кор' },
+    color: '#22c55e',
+    bonus: '+3% к XP Выносливости',
+    req: 'За 300 повторов пресса',
+    effect: { xp: { END: 0.03 } },
+    achievement: 'abs300',
+    track: 'abs',
+    tier: 1,
+  },
+  core_ii: {
+    names: { male: 'Несгибаемый кор', female: 'Несгибаемый кор' },
+    color: '#4ade80',
+    bonus: '+6% к XP Выносливости',
+    req: 'За 1 500 повторов пресса',
+    effect: { xp: { END: 0.06 } },
+    achievement: 'abs1500',
+    track: 'abs',
+    tier: 2,
+  },
+  plank: {
+    names: { male: 'Стойкий как скала', female: 'Стойкая как скала' },
+    color: '#16a34a',
+    bonus: '+3% к XP Выносливости',
+    req: 'За 10 минут планки',
+    effect: { xp: { END: 0.03 } },
+    achievement: 'plank600',
+    track: 'plank',
+    tier: 1,
+  },
+  plank_ii: {
+    names: { male: 'Живая стена', female: 'Живая стена' },
+    color: '#86efac',
+    bonus: '+6% к XP Выносливости',
+    req: 'За 40 минут планки',
+    effect: { xp: { END: 0.06 } },
+    achievement: 'plank2400',
+    track: 'plank',
+    tier: 2,
+  },
+  jumper: {
+    names: { male: 'Прыгун', female: 'Прыгунья' },
+    color: '#eab308',
+    bonus: '+3% к XP Ловкости',
+    req: 'За 2 000 прыжков на скакалке',
+    effect: { xp: { AGI: 0.03 } },
+    achievement: 'rope2k',
+    track: 'jumprope',
+    tier: 1,
+  },
+  jumper_ii: {
+    names: { male: 'Буря скакалки', female: 'Буря скакалки' },
+    color: '#fde047',
+    bonus: '+6% к XP Ловкости',
+    req: 'За 10 000 прыжков на скакалке',
+    effect: { xp: { AGI: 0.06 } },
+    achievement: 'rope10k',
+    track: 'jumprope',
+    tier: 2,
+  },
+  burpee: {
+    names: { male: 'Берпи-охотник', female: 'Берпи-охотница' },
+    color: '#f59e0b',
+    bonus: '+3% к XP Ловкости',
+    req: 'За 100 берпи',
+    effect: { xp: { AGI: 0.03 } },
+    achievement: 'burpees100',
+    track: 'burpees',
+    tier: 1,
+  },
+  burpee_ii: {
+    names: { male: 'Буря берпи', female: 'Буря берпи' },
+    color: '#fbbf24',
+    bonus: '+6% к XP Ловкости',
+    req: 'За 400 берпи',
+    effect: { xp: { AGI: 0.06 } },
+    achievement: 'burpees400',
+    track: 'burpees',
+    tier: 2,
+  },
+  leaper: {
+    names: { male: 'Прыгун из тени', female: 'Прыгунья из тени' },
+    color: '#eab308',
+    bonus: '+3% к XP Ловкости',
+    req: 'За 200 выпрыгиваний',
+    effect: { xp: { AGI: 0.03 } },
+    achievement: 'jumps200',
+    track: 'jumps',
+    tier: 1,
+  },
+  leaper_ii: {
+    names: { male: 'Тень в прыжке', female: 'Тень в прыжке' },
+    color: '#facc15',
+    bonus: '+6% к XP Ловкости',
+    req: 'За 800 выпрыгиваний',
+    effect: { xp: { AGI: 0.06 } },
+    achievement: 'jumps800',
+    track: 'jumps',
+    tier: 2,
+  },
+  flex: {
+    names: { male: 'Гибкий клинок', female: 'Гибкий клинок' },
+    color: '#a3e635',
+    bonus: '+3% к XP Ловкости',
+    req: 'За 30 минут растяжки',
+    effect: { xp: { AGI: 0.03 } },
+    achievement: 'stretch30',
+    track: 'stretch',
+    tier: 1,
+  },
+  flex_ii: {
+    names: { male: 'Живая лоза', female: 'Живая лоза' },
+    color: '#bef264',
+    bonus: '+6% к XP Ловкости',
+    req: 'За 120 минут растяжки',
+    effect: { xp: { AGI: 0.06 } },
+    achievement: 'stretch120',
+    track: 'stretch',
+    tier: 2,
+  },
+  reader: {
+    names: { male: 'Чтец гримуаров', female: 'Чтица гримуаров' },
+    color: '#3b82f6',
+    bonus: '+3% к XP Интеллекта',
+    req: 'За 180 минут чтения',
+    effect: { xp: { INT: 0.03 } },
+    achievement: 'read180',
+    track: 'reading',
+    tier: 1,
+  },
+  reader_ii: {
+    names: { male: 'Архивариус страниц', female: 'Архивариус страниц' },
+    color: '#93c5fd',
+    bonus: '+6% к XP Интеллекта',
+    req: 'За 900 минут чтения',
+    effect: { xp: { INT: 0.06 } },
+    achievement: 'read900',
+    track: 'reading',
+    tier: 2,
+  },
+  scholar: {
+    names: { male: 'Ученик Системы', female: 'Ученица Системы' },
+    color: '#2563eb',
+    bonus: '+3% к XP Интеллекта',
+    req: 'За 120 минут учёбы',
+    effect: { xp: { INT: 0.03 } },
+    achievement: 'study120',
+    track: 'study',
+    tier: 1,
+  },
+  scholar_ii: {
+    names: { male: 'Магистр Системы', female: 'Магистр Системы' },
+    color: '#60a5fa',
+    bonus: '+6% к XP Интеллекта',
+    req: 'За 600 минут учёбы',
+    effect: { xp: { INT: 0.06 } },
+    achievement: 'study600',
+    track: 'study',
+    tier: 2,
+  },
+  monk: {
+    names: { male: 'Послушник воли', female: 'Послушница воли' },
+    color: '#a855f7',
+    bonus: '+3% к XP Воли',
+    req: 'За 60 минут медитации',
+    effect: { xp: { WIL: 0.03 } },
+    achievement: 'med60',
+    track: 'meditation',
+    tier: 1,
+  },
+  monk_ii: {
+    names: { male: 'Тихая воля', female: 'Тихая воля' },
+    color: '#d8b4fe',
+    bonus: '+6% к XP Воли',
+    req: 'За 300 минут медитации',
+    effect: { xp: { WIL: 0.06 } },
+    achievement: 'med300',
+    track: 'meditation',
+    tier: 2,
+  },
 };
 
 // exId — прогресс по totals; track+tier — уровни одной ветки достижений/титулов.
@@ -185,6 +485,36 @@ export const ACHIEVEMENTS = [
   { id: 'meals30', name: 'Кулинар Системы', exId: 'meals', goal: 30, title: 'chef', color: '#eab308', track: 'meals', tier: 1 },
   { id: 'languages1000', name: 'Полиглот', exId: 'languages', goal: 1000, title: 'keeper', color: '#3b82f6', track: 'languages', tier: 1 },
   { id: 'chess50', name: 'Пятьдесят партий', exId: 'chess', goal: 50, title: 'tactician', color: '#60a5fa', track: 'chess', tier: 1 },
+  { id: 'steps20k', name: 'Двадцать тысяч шагов', desc: 'Шаги', progress: (p) => p.totals?.walk_steps ?? 0, goal: 20000, title: 'walker', color: '#2dd4bf', track: 'steps', tier: 1 },
+  { id: 'steps100k', name: 'Сто тысяч шагов', desc: 'Шаги', progress: (p) => p.totals?.walk_steps ?? 0, goal: 100000, title: 'walker_ii', color: '#5eead4', track: 'steps', tier: 2 },
+  { id: 'contracts7', name: 'Семь контрактов', desc: 'Закрытые контракты', progress: (p) => p.world?.contracts ?? 0, goal: 7, title: 'contractor', color: '#c084fc', track: 'contracts', tier: 1 },
+  { id: 'contracts30', name: 'Тридцать контрактов', desc: 'Закрытые контракты', progress: (p) => p.world?.contracts ?? 0, goal: 30, title: 'contractor_ii', color: '#d8b4fe', track: 'contracts', tier: 2 },
+  { id: 'streak7', name: 'Неделя явки', desc: 'Рекорд серии', progress: (p) => p.attendance?.best ?? 0, goal: 7, title: 'attendant', color: '#fb7185', track: 'streak', tier: 1 },
+  { id: 'streak21', name: 'Три недели явки', desc: 'Рекорд серии', progress: (p) => p.attendance?.best ?? 0, goal: 21, title: 'attendant_ii', color: '#fda4af', track: 'streak', tier: 2 },
+  { id: 'boss1', name: 'Первый босс', desc: 'Добыча босса дня', progress: (p) => p.world?.bossClaims ?? 0, goal: 1, title: 'slayer', color: '#ef4444', track: 'boss', tier: 1 },
+  { id: 'boss7', name: 'Семь боссов', desc: 'Добыча босса дня', progress: (p) => p.world?.bossClaims ?? 0, goal: 7, title: 'slayer_ii', color: '#f87171', track: 'boss', tier: 2 },
+  { id: 'craft10', name: 'Десять изделий', desc: 'Предметы профессий', progress: (p) => p.world?.crafted ?? 0, goal: 10, title: 'artisan', color: '#f59e0b', track: 'craft', tier: 1 },
+  { id: 'craft40', name: 'Сорок изделий', desc: 'Предметы профессий', progress: (p) => p.world?.crafted ?? 0, goal: 40, title: 'artisan_ii', color: '#fbbf24', track: 'craft', tier: 2 },
+  { id: 'legsquats400', name: 'Четыреста приседаний', exId: 'legsquats', goal: 400, title: 'squatter', color: '#ef4444', track: 'legsquats', tier: 1 },
+  { id: 'legsquats2000', name: 'Две тысячи приседаний', exId: 'legsquats', goal: 2000, title: 'squatter_ii', color: '#f87171', track: 'legsquats', tier: 2 },
+  { id: 'abs300', name: 'Триста на пресс', exId: 'abs', goal: 300, title: 'core', color: '#22c55e', track: 'abs', tier: 1 },
+  { id: 'abs1500', name: 'Полторы тысячи на пресс', exId: 'abs', goal: 1500, title: 'core_ii', color: '#4ade80', track: 'abs', tier: 2 },
+  { id: 'plank600', name: 'Десять минут планки', exId: 'plank', goal: 600, title: 'plank', color: '#16a34a', track: 'plank', tier: 1 },
+  { id: 'plank2400', name: 'Сорок минут планки', exId: 'plank', goal: 2400, title: 'plank_ii', color: '#86efac', track: 'plank', tier: 2 },
+  { id: 'rope2k', name: 'Две тысячи прыжков', exId: 'jumprope', goal: 2000, title: 'jumper', color: '#eab308', track: 'jumprope', tier: 1 },
+  { id: 'rope10k', name: 'Десять тысяч прыжков', exId: 'jumprope', goal: 10000, title: 'jumper_ii', color: '#fde047', track: 'jumprope', tier: 2 },
+  { id: 'burpees100', name: 'Сотня берпи', exId: 'burpees', goal: 100, title: 'burpee', color: '#f59e0b', track: 'burpees', tier: 1 },
+  { id: 'burpees400', name: 'Четыреста берпи', exId: 'burpees', goal: 400, title: 'burpee_ii', color: '#fbbf24', track: 'burpees', tier: 2 },
+  { id: 'jumps200', name: 'Двести выпрыгиваний', exId: 'squats', goal: 200, title: 'leaper', color: '#eab308', track: 'jumps', tier: 1 },
+  { id: 'jumps800', name: 'Восемьсот выпрыгиваний', exId: 'squats', goal: 800, title: 'leaper_ii', color: '#facc15', track: 'jumps', tier: 2 },
+  { id: 'stretch30', name: 'Полчаса растяжки', exId: 'stretching', goal: 30, title: 'flex', color: '#a3e635', track: 'stretch', tier: 1 },
+  { id: 'stretch120', name: 'Два часа растяжки', exId: 'stretching', goal: 120, title: 'flex_ii', color: '#bef264', track: 'stretch', tier: 2 },
+  { id: 'read180', name: 'Три часа чтения', exId: 'reading', goal: 180, title: 'reader', color: '#3b82f6', track: 'reading', tier: 1 },
+  { id: 'read900', name: 'Пятнадцать часов чтения', exId: 'reading', goal: 900, title: 'reader_ii', color: '#93c5fd', track: 'reading', tier: 2 },
+  { id: 'study120', name: 'Два часа учёбы', exId: 'study', goal: 120, title: 'scholar', color: '#2563eb', track: 'study', tier: 1 },
+  { id: 'study600', name: 'Десять часов учёбы', exId: 'study', goal: 600, title: 'scholar_ii', color: '#60a5fa', track: 'study', tier: 2 },
+  { id: 'med60', name: 'Час медитации', exId: 'meditation', goal: 60, title: 'monk', color: '#a855f7', track: 'meditation', tier: 1 },
+  { id: 'med300', name: 'Пять часов медитации', exId: 'meditation', goal: 300, title: 'monk_ii', color: '#d8b4fe', track: 'meditation', tier: 2 },
   { id: 'firstQuest', name: 'Первый шаг', desc: 'Выполнить первую тренировку', progress: (p) => p.log.length, goal: 1, color: '#22d3ee', tier: 1 },
   { id: 'level10', name: 'Пробуждённый', desc: 'Достичь 10 уровня', progress: (p) => levelFromXp(p.xp).level, goal: 10, color: '#a855f7', tier: 1 },
   { id: 'maxAp15', name: 'Бездонный резерв', desc: 'Поднять максимум энергии до 15 AP', progress: (p) => p.maxAp, goal: 15, color: '#3b82f6', tier: 1 },
@@ -225,6 +555,13 @@ export function achievementTrackTier(p, track) {
     (max, a) => Math.max(max, a.tier ?? 1),
     0,
   );
+}
+
+/** Титул и достижение уровня 2 видны только после уровня 1 той же ветки. */
+export function isTierVisible(p, entry) {
+  const tier = entry?.tier ?? 1;
+  if (!entry?.track || tier <= 1) return true;
+  return achievementTrackTier(p, entry.track) >= tier - 1;
 }
 
 /** Мс до следующего +1 AP (0 если на капе или тик уже должен сработать). */
@@ -306,6 +643,37 @@ export function renamePlayer(p, rawName, now = Date.now()) {
   };
 }
 
+/** Смена пола: не чаще раза в 30 дней. */
+export const GENDER_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+export const GENDER_LABELS = {
+  male: 'Мужской',
+  female: 'Женский',
+};
+
+export function msUntilGenderChange(p, now = Date.now()) {
+  const last = Number(p?.genderChangedAt) || 0;
+  if (!last) return 0;
+  return Math.max(0, last + GENDER_CHANGE_COOLDOWN_MS - now);
+}
+
+export function canChangeGender(p, now = Date.now()) {
+  return msUntilGenderChange(p, now) <= 0;
+}
+
+export function changeGender(p, rawGender, now = Date.now()) {
+  const gender = rawGender === 'female' ? 'female' : rawGender === 'male' ? 'male' : '';
+  if (!gender) return { error: 'Выберите пол' };
+  const current = p?.gender === 'female' ? 'female' : 'male';
+  if (gender === current) return { error: 'Это уже текущий пол' };
+  const wait = msUntilGenderChange(p, now);
+  if (wait > 0) return { error: `Смена пола доступна через ${formatNameCooldown(wait)}` };
+  return {
+    player: { ...p, gender, genderChangedAt: now, updatedAt: now },
+    events: [{ type: 'system', text: `Пол изменён: ${GENDER_LABELS[gender]}` }],
+  };
+}
+
 export const BUFF_INFO = {
   metabolism: {
     id: 'metabolism',
@@ -355,7 +723,7 @@ export const isFoodComa = (p, now = Date.now()) => (p.buffs?.foodComaUntil ?? 0)
 export const isClogged = (p, now = Date.now()) => (p.buffs?.clogUntil ?? 0) > now || isFoodComa(p, now);
 
 export function xpMultiplier(p, stat, now = Date.now()) {
-  let m = 1 + (activeEffect(p).xp?.[stat] ?? 0);
+  let m = 1 + (activeEffect(p).xp?.[stat] ?? 0) + (activeEffect(p).xpAll ?? 0);
   if (isMetabolism(p, now)) m += METABOLISM_BONUS;
   else if (isAnabolic(p, now)) m += ANABOLIC_XP_BONUS;
   else if (isSated(p, now)) m += SATIETY_XP_BONUS;
@@ -555,9 +923,22 @@ export function buildWeeklyActivity(p, now = Date.now()) {
 
 const EMPTY_INV = {
   copper_ore: 0,
+  iron_ore: 0,
+  tin_ore: 0,
   wood: 0,
+  hardwood: 0,
+  resin: 0,
   wild_herbs: 0,
+  moonpetal: 0,
+  shadowroot: 0,
+  glowcap: 0,
   raw_fish: 0,
+  river_mussel: 0,
+  kelp: 0,
+  raw_hide: 0,
+  beast_bone: 0,
+  mana_dust: 0,
+  void_shard: 0,
   magic_ink: 0,
   cheatmeal_scroll: 0,
   focus_elixir: 0,
@@ -589,6 +970,7 @@ export function createPlayer(name, gender) {
     palium: 0,
     inscriptionXp: 0,
     cookingSkill: 0,
+    craftSkills: { smith: 0, leather: 0, tailor: 0, alchemy: 0, jewel: 0 },
     customRecipes: [],
     customQuests: [],
     activeTitle: 'wanderer',
@@ -596,6 +978,8 @@ export function createPlayer(name, gender) {
     totals: {},
     buffs: {},
     inventory: { ...EMPTY_INV },
+    generatedGear: {},
+    vendorStock: null,
     equipment: {
       mainHand: null,
       offHand: null,
@@ -616,6 +1000,11 @@ export function createPlayer(name, gender) {
     nodeCooldowns: {},
     cookCounts: {},
     steps: { date: dayKey(now), today: 0, bank: 0 },
+    lastActiveDate: dayKey(now),
+    attendance: { streak: 0, best: 0, lastClosed: '', freeWeek: '', milestones: [] },
+    daily: null,
+    returnOffer: null,
+    bossClaimDate: '',
     radar: null,
     breach: null,
     world: { gathered: 0, cooked: 0, breaches: 0, breachWins: 0 },
@@ -636,7 +1025,7 @@ export function checkAchievements(p, events) {
 export function sealResult(result) {
   if (result.error) return result;
   const events = [...(result.events ?? [])];
-  return { player: checkAchievements(result.player, events), events };
+  return { ...result, player: checkAchievements(result.player, events), events };
 }
 
 // Приводит сохранения v1/v2 / облачный JSON к текущей схеме.
@@ -649,6 +1038,8 @@ export function hydratePlayer(p) {
     achievements: p.achievements ?? [],
     buffs: p.buffs ?? {},
     inventory: { ...EMPTY_INV, ...(p.inventory ?? {}) },
+    generatedGear: p.generatedGear && typeof p.generatedGear === 'object' ? p.generatedGear : {},
+    vendorStock: p.vendorStock?.offers ? p.vendorStock : null,
     equipment: {
       mainHand: null,
       offHand: null,
@@ -672,12 +1063,30 @@ export function hydratePlayer(p) {
     customRecipes: p.customRecipes ?? [],
     customQuests: Array.isArray(p.customQuests) ? p.customQuests : [],
     cookingSkill: p.cookingSkill ?? 0,
+    craftSkills: {
+      smith: Math.max(0, Math.floor(Number(p.craftSkills?.smith) || 0)),
+      leather: Math.max(0, Math.floor(Number(p.craftSkills?.leather) || 0)),
+      tailor: Math.max(0, Math.floor(Number(p.craftSkills?.tailor) || 0)),
+      alchemy: Math.max(0, Math.floor(Number(p.craftSkills?.alchemy) || 0)),
+      jewel: Math.max(0, Math.floor(Number(p.craftSkills?.jewel) || 0)),
+    },
     inscriptionXp: p.inscriptionXp ?? 0,
     lastApTick: p.lastApTick ?? Date.now(),
     lastHpTick: p.lastHpTick ?? Date.now(),
     hp: p.hp == null ? null : Math.max(0, Math.round(Number(p.hp) || 0)),
     lastDailyReset: p.lastDailyReset ?? '',
     steps: p.steps ?? { date: '', today: 0, bank: 0 },
+    lastActiveDate: p.lastActiveDate ?? '',
+    attendance: {
+      streak: Math.max(0, Math.floor(Number(p.attendance?.streak) || 0)),
+      best: Math.max(0, Math.floor(Number(p.attendance?.best) || 0)),
+      lastClosed: p.attendance?.lastClosed ?? '',
+      freeWeek: p.attendance?.freeWeek ?? '',
+      milestones: Array.isArray(p.attendance?.milestones) ? p.attendance.milestones : [],
+    },
+    daily: p.daily?.date ? p.daily : null,
+    returnOffer: p.returnOffer?.date ? p.returnOffer : null,
+    bossClaimDate: p.bossClaimDate ?? '',
     radar: p.radar ?? null,
     breach: p.breach?.active ? p.breach : null,
     world: { gathered: 0, cooked: 0, breaches: 0, breachWins: 0, ...(p.world ?? {}) },
@@ -978,7 +1387,11 @@ export function applyTraining(p, stat, exId, amount, rateOverride) {
   }
 
   next = checkAchievements(next, events);
-  return { player: next, events };
+  return {
+    player: next,
+    events,
+    daily: { action: ex.custom ? 'quest' : 'train', amount: points },
+  };
 }
 
 export function sumPoints(stat, values) {

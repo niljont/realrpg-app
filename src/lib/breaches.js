@@ -393,7 +393,11 @@ export function setTodaySteps(p, raw) {
   }
 
   next = checkAchievements(next, events);
-  return { player: next, events };
+  return {
+    player: next,
+    events,
+    daily: { action: 'steps', amount: Math.max(0, newlyCredited), total: value },
+  };
 }
 
 /* ---------- переход / вход ---------- */
@@ -857,7 +861,7 @@ function finishBreach(p, { keepLoot, cleared, defeated = false }, events) {
     events.push({ type: 'energy', text: `Брешь «${session.name}» закрыта · HP ${outHp}/${max}` });
   }
 
-  return { player: next, events };
+  return { player: next, events, ...(cleared ? { daily: { action: 'breach', amount: 1 } } : {}) };
 }
 
 export function formatSteps(n) {

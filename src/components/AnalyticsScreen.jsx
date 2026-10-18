@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Activity, CalendarDays, ChefHat, Dumbbell, Flame, Gem, Map as MapIcon, Sparkles, Trophy, Zap, ChevronsUp } from 'lucide-react';
+import { Activity, CalendarDays, ChefHat, Dumbbell, Flame, Gem, Hammer, Map as MapIcon, Sparkles, Trophy, Zap } from 'lucide-react';
 import { PALIUM_COLOR, STATS, STAT_META, dayKey, formatPalium, levelFromXp, unlockedTitleCount } from '../lib/game';
 
 const WEEKDAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -176,7 +176,7 @@ export default function AnalyticsScreen({ player }) {
           <StatCard icon={CalendarDays} label="Активных дней" value={life.activeDays} color="#e4e4e7" />
           <StatCard icon={Flame} label="Серия" value={`${life.current} дн.`} color="#f97316" sub={`Рекорд: ${life.best} дн.`} />
           <StatCard icon={Zap} label="AP восстановлено" value={energy.apRestored} color="#3b82f6" sub={`${energy.strPoints} поинтов Силы`} />
-          <StatCard icon={ChevronsUp} label="Max AP" value={player?.maxAp ?? 10} color="#22c55e" sub={`+${energy.maxApGained ?? 0}`} />
+          <StatCard icon={Hammer} label="Создано" value={player?.world?.crafted ?? 0} color="#22c55e" sub="В профессиях" />
           <StatCard icon={MapIcon} label="Ресурсов собрано" value={player?.world?.gathered ?? 0} color="#b45309" />
           <StatCard icon={ChefHat} label="Блюд" value={player?.world?.cooked ?? 0} color="#eab308" />
           <StatCard icon={Trophy} label="Бреши" value={player?.world?.breaches ?? 0} color="#a855f7" sub={`Побед: ${player?.world?.breachWins ?? 0}`} />

@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
-import { LogOut, Pencil, RefreshCw, RotateCcw } from 'lucide-react';
+import { LogOut, Mars, Pencil, RefreshCw, RotateCcw, ScrollText, Venus } from 'lucide-react';
 import Modal from './Modal';
-import { canChangeName, formatNameCooldown, msUntilNameChange } from '../lib/game';
+import { CHANGELOG } from '../lib/changelog';
+import {
+  GENDER_LABELS,
+  canChangeGender,
+  canChangeName,
+  formatNameCooldown,
+  msUntilGenderChange,
+  msUntilNameChange,
+} from '../lib/game';
 
 async function clearAppCacheAndReload() {
   try {
@@ -26,21 +34,30 @@ async function clearAppCacheAndReload() {
   window.location.replace(url.toString());
 }
 
-export default function SettingsModal({ player, onClose, onSignOut, onResetAccount, onRename }) {
-  const [view, setView] = useState('menu'); // menu | rename | logout | reset1 | reset2
+const GENDER_OPTIONS = [
+  { id: 'male', label: 'Мужской', Icon: Mars, color: '#22d3ee' },
+  { id: 'female', label: 'Женский', Icon: Venus, color: '#e879f9' },
+];
+
+export default function SettingsModal({ player, onClose, onSignOut, onResetAccount, onRename, onChangeGender }) {
+  const [view, setView] = useState('menu'); // menu | rename | gender | changelog | logout | reset1 | reset2
   const [busy, setBusy] = useState(false);
   const [nameDraft, setNameDraft] = useState(player?.name ?? '');
   const [renameError, setRenameError] = useState('');
+  const [genderError, setGenderError] = useState('');
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (view !== 'menu' && view !== 'rename') return undefined;
+    if (view !== 'menu' && view !== 'rename' && view !== 'gender') return undefined;
     const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, [view]);
 
   const waitMs = msUntilNameChange(player, now);
   const renameReady = canChangeName(player, now);
+  const genderWaitMs = msUntilGenderChange(player, now);
+  const genderReady = canChangeGender(player, now);
+  const currentGender = player?.gender === 'female' ? 'female' : 'male';
 
   const run = async (fn) => {
     if (busy) return;
@@ -107,6 +124,96 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
             {busy ? '…' : 'Сохранить'}
           </button>
         </div>
+      </Modal>
+    );
+  }
+
+  if (view === 'gender') {
+    return (
+      <Modal title="Смена пола" onClose={onClose}>
+        <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">
+          Пол можно менять раз в месяц. Сейчас:{' '}
+          <span className="text-zinc-300">{GENDER_LABELS[currentGender]}</span>
+        </p>
+        {!genderReady && (
+          <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+            Доступно через {formatNameCooldown(genderWaitMs)}
+          </div>
+        )}
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          {GENDER_OPTIONS.map(({ id, label, Icon, color }) => {
+            const active = currentGender === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={busy || !genderReady || active}
+                onClick={() =>
+                  run(async () => {
+                    setGenderError('');
+                    const res = await onChangeGender(id);
+                    if (res?.error) {
+                      setGenderError(res.error);
+                      return;
+                    }
+                    onClose();
+                  })
+                }
+                className="flex flex-col items-center gap-1 rounded-xl border px-3 py-4 text-sm font-bold disabled:opacity-40"
+                style={{
+                  borderColor: active ? color : '#3f3f46',
+                  color: active ? color : '#e4e4e7',
+                  background: active ? `${color}18` : 'rgb(24 24 27 / 0.7)',
+                }}
+              >
+                <Icon size={18} />
+                {label}
+                {active && <span className="text-[10px] font-bold text-zinc-500">Сейчас</span>}
+              </button>
+            );
+          })}
+        </div>
+        {genderError && <p className="mb-3 text-[11px] text-red-400">{genderError}</p>}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setGenderError('');
+            setView('menu');
+          }}
+          className="w-full rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
+        >
+          Назад
+        </button>
+      </Modal>
+    );
+  }
+
+  if (view === 'changelog') {
+    return (
+      <Modal title="Что нового" onClose={onClose}>
+        <div className="space-y-4">
+          {CHANGELOG.map((entry) => (
+            <section key={entry.date}>
+              <div className="font-display text-[11px] tracking-widest text-neon/80">{entry.date}</div>
+              <ul className="mt-2 space-y-1.5">
+                {entry.items.map((line) => (
+                  <li key={line} className="text-[12px] leading-relaxed text-zinc-300">
+                    <span className="mr-1.5 text-neon">·</span>
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setView('menu')}
+          className="mt-4 w-full rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
+        >
+          Назад
+        </button>
       </Modal>
     );
   }
@@ -218,6 +325,39 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
             <div className="truncate text-[11px] text-zinc-500">
               {renameReady ? `Сейчас: ${player?.name}` : `Через ${formatNameCooldown(waitMs)}`}
             </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setGenderError('');
+            setView('gender');
+          }}
+          className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
+        >
+          {currentGender === 'female' ? (
+            <Venus size={18} className="shrink-0 text-fuchsia-300" />
+          ) : (
+            <Mars size={18} className="shrink-0 text-neon" />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-zinc-100">Сменить пол</div>
+            <div className="truncate text-[11px] text-zinc-500">
+              {genderReady ? `Сейчас: ${GENDER_LABELS[currentGender]}` : `Через ${formatNameCooldown(genderWaitMs)}`}
+            </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setView('changelog')}
+          className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
+        >
+          <ScrollText size={18} className="shrink-0 text-neon" />
+          <div>
+            <div className="text-sm font-bold text-zinc-100">Список изменений</div>
+            <div className="text-[11px] text-zinc-500">Что появилось в последних обновлениях</div>
           </div>
         </button>
 

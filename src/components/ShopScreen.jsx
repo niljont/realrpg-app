@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownUp, Gem, X } from 'lucide-react';
 import { PALIUM_COLOR, formatPalium, getStats } from '../lib/game';
+import { msUntilVendorRefresh } from '../lib/loot';
 import {
   GRIP_LABELS,
   ITEM_QUALITY,
@@ -16,6 +17,7 @@ import {
 } from '../lib/equipment';
 
 const TABS = [
+  { id: 'vendor', label: 'Лавка' },
   { id: 'weapon', label: 'Оружие' },
   { id: 'armor', label: 'Броня' },
   { id: 'accessory', label: 'Аксессуары' },
@@ -36,6 +38,7 @@ const GEAR_SORTS = [
   { id: 'dodge', label: 'Уклон', get: (item) => item.dodgeChance ?? 0 },
   { id: 'magic', label: 'Маг.урон', get: (item) => item.magicDmgMul ?? 0 },
   { id: 'shield', label: 'Стартовый щит', get: (item) => item.startShield ?? item.trinketShield ?? 0 },
+  { id: 'ilvl', label: 'Уровень', get: (item) => item.itemLevel ?? 0 },
 ];
 
 const STAT_FILTERS_BY_TAB = {
@@ -58,7 +61,21 @@ const STAT_FILTERS_BY_TAB = {
     { id: 'END', label: 'Выносливость' },
     { id: 'INT', label: 'Интеллект' },
   ],
+  vendor: [
+    { id: 'all', label: 'Все' },
+    { id: 'STR', label: 'Сила' },
+    { id: 'AGI', label: 'Ловкость' },
+    { id: 'INT', label: 'Интеллект' },
+    { id: 'END', label: 'Выносливость' },
+  ],
 };
+
+function formatVendorLeft(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
 
 function filterByReqStat(list, statId) {
   if (statId === 'all') return list;
@@ -157,6 +174,7 @@ function GearCard({ item, player, onBuy, flash }) {
           </div>
           <div className="text-[10px] text-zinc-500">
             {ITEM_QUALITY[item.quality]?.label}
+            {item.itemLevel ? ` · ур. ${item.itemLevel}` : ''}
             {item.grip ? ` · ${GRIP_LABELS[item.grip]}` : ''}
             {item.slot && !item.grip
               ? ` · ${SLOT_LABELS[item.slot] ?? SLOT_LABELS[`${item.slot}1`] ?? item.slot}`
@@ -220,13 +238,14 @@ function ConsumableCard({ offer, player, onBuy, flash }) {
 }
 
 export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable }) {
-  const [tab, setTab] = useState('weapon');
+  const [tab, setTab] = useState('vendor');
   const [sortId, setSortId] = useState('price');
   const [dir, setDir] = useState('asc');
   const [statFilter, setStatFilter] = useState('all');
   const [flashId, setFlashId] = useState(null);
   const [spendFx, setSpendFx] = useState(null);
   const [balancePulse, setBalancePulse] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const stats = getStats(player);
 
   const isConsumable = tab === 'consumable';
@@ -252,6 +271,15 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
     () => sortList(SHOP_CONSUMABLES, activeSortId, dir, CONSUMABLE_SORTS),
     [activeSortId, dir],
   );
+  const vendorOffers = useMemo(
+    () => sortList(filterByReqStat(player.vendorStock?.offers ?? [], activeStatFilter), activeSortId, dir, GEAR_SORTS),
+    [player.vendorStock, activeSortId, dir, activeStatFilter],
+  );
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!flashId) return undefined;
@@ -358,6 +386,29 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
           <StatFilterBar filters={statFilters} value={activeStatFilter} onChange={setStatFilter} />
         )}
 
+        {tab === 'vendor' && (
+          <div className="space-y-2">
+            <p className="text-[11px] leading-relaxed text-zinc-500">
+              Случайные вещи под ваш уровень. Обновление через {formatVendorLeft(msUntilVendorRefresh(now))}. Белые и
+              зелёные встречаются часто, синие редко, фиолетовые почти не попадаются.
+            </p>
+            {vendorOffers.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-zinc-800 py-8 text-center text-xs text-zinc-600">
+                Лавка пуста до следующего часа
+              </div>
+            ) : (
+              vendorOffers.map((item) => (
+                <GearCard
+                  key={item.id}
+                  item={item}
+                  player={player}
+                  onBuy={handleBuyGear}
+                  flash={flashId === item.id}
+                />
+              ))
+            )}
+          </div>
+        )}
         {tab === 'weapon' && (
           <div className="space-y-2">
             {weapons.map((item) => (

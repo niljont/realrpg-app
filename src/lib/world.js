@@ -4,6 +4,7 @@ import {
   METABOLISM_HOURS,
   activeEffect,
   addPalium,
+  dayKey,
   formatPalium,
   levelFromXp,
 } from './game';
@@ -12,26 +13,165 @@ import { GEAR_ITEMS, healPlayer, sellInventoryItem as sellWeaponItem } from './e
 /* ---------- предметы ---------- */
 
 const BASE_ITEMS = {
+  /* --- добыча / кузня --- */
   copper_ore: {
     id: 'copper_ore',
     name: 'Медная руда',
     emoji: '🪨',
     color: '#b45309',
-    desc: 'Продаётся из инвентаря',
+    desc: 'Сырьё Кузни и продажи',
     category: 'resource',
     sellPrice: 0.008,
   },
+  iron_ore: {
+    id: 'iron_ore',
+    name: 'Железная руда',
+    emoji: '⛏️',
+    color: '#78716c',
+    desc: 'Сырьё Кузни',
+    category: 'resource',
+    sellPrice: 0.01,
+  },
+  tin_ore: {
+    id: 'tin_ore',
+    name: 'Оловянная руда',
+    emoji: '🪙',
+    color: '#a8a29e',
+    desc: 'Сырьё Кузни (сплавы)',
+    category: 'resource',
+    sellPrice: 0.009,
+  },
+  /* --- лес / плотницкое --- */
   wood: {
     id: 'wood',
     name: 'Древесина',
     emoji: '🪵',
     color: '#a16207',
-    desc: 'Продаётся из инвентаря / крафт',
+    desc: 'Сырьё Плотницкого дела',
     category: 'resource',
     sellPrice: 0.005,
   },
-  wild_herbs: { id: 'wild_herbs', name: 'Дикие травы', emoji: '🌿', color: '#22c55e', desc: 'Сырьё Начертания и кухни', category: 'resource', sellPrice: 0.004 },
-  raw_fish: { id: 'raw_fish', name: 'Сырая рыба', emoji: '🐟', color: '#38bdf8', desc: 'Ингредиент Кулинарии', category: 'resource', sellPrice: 0.006 },
+  hardwood: {
+    id: 'hardwood',
+    name: 'Твёрдая древесина',
+    emoji: '🌳',
+    color: '#854d0e',
+    desc: 'Сырьё Плотницкого дела',
+    category: 'resource',
+    sellPrice: 0.008,
+  },
+  resin: {
+    id: 'resin',
+    name: 'Смола',
+    emoji: '🟡',
+    color: '#ca8a04',
+    desc: 'Сырьё Плотницкого дела и Алхимии',
+    category: 'resource',
+    sellPrice: 0.006,
+  },
+  /* --- травы / начертание / алхимия --- */
+  wild_herbs: {
+    id: 'wild_herbs',
+    name: 'Дикие травы',
+    emoji: '🌿',
+    color: '#22c55e',
+    desc: 'Сырьё Начертания и Кулинарии',
+    category: 'resource',
+    sellPrice: 0.004,
+  },
+  moonpetal: {
+    id: 'moonpetal',
+    name: 'Лунный лепесток',
+    emoji: '🌙',
+    color: '#a5b4fc',
+    desc: 'Сырьё Алхимии и Начертания',
+    category: 'resource',
+    sellPrice: 0.007,
+  },
+  shadowroot: {
+    id: 'shadowroot',
+    name: 'Теневой корень',
+    emoji: '🌑',
+    color: '#6d28d9',
+    desc: 'Сырьё Алхимии',
+    category: 'resource',
+    sellPrice: 0.008,
+  },
+  glowcap: {
+    id: 'glowcap',
+    name: 'Светящийся гриб',
+    emoji: '🍄',
+    color: '#34d399',
+    desc: 'Сырьё Алхимии и Кулинарии',
+    category: 'resource',
+    sellPrice: 0.007,
+  },
+  /* --- вода / кухня --- */
+  raw_fish: {
+    id: 'raw_fish',
+    name: 'Сырая рыба',
+    emoji: '🐟',
+    color: '#38bdf8',
+    desc: 'Ингредиент Кулинарии',
+    category: 'resource',
+    sellPrice: 0.006,
+  },
+  river_mussel: {
+    id: 'river_mussel',
+    name: 'Речная мидия',
+    emoji: '🐚',
+    color: '#67e8f9',
+    desc: 'Ингредиент Кулинарии',
+    category: 'resource',
+    sellPrice: 0.007,
+  },
+  kelp: {
+    id: 'kelp',
+    name: 'Водоросли',
+    emoji: '🌊',
+    color: '#14b8a6',
+    desc: 'Ингредиент Кулинарии и Алхимии',
+    category: 'resource',
+    sellPrice: 0.005,
+  },
+  /* --- охота / кожевничество --- */
+  raw_hide: {
+    id: 'raw_hide',
+    name: 'Сырая шкура',
+    emoji: '🦌',
+    color: '#d97706',
+    desc: 'Сырьё Кожевничества',
+    category: 'resource',
+    sellPrice: 0.009,
+  },
+  beast_bone: {
+    id: 'beast_bone',
+    name: 'Кость зверя',
+    emoji: '🦴',
+    color: '#e7e5e4',
+    desc: 'Сырьё Кожевничества и Кузни',
+    category: 'resource',
+    sellPrice: 0.007,
+  },
+  /* --- мистика / чародейство --- */
+  mana_dust: {
+    id: 'mana_dust',
+    name: 'Мана-пыль',
+    emoji: '✨',
+    color: '#818cf8',
+    desc: 'Сырьё Чародейства и Начертания',
+    category: 'resource',
+    sellPrice: 0.012,
+  },
+  void_shard: {
+    id: 'void_shard',
+    name: 'Осколок пустоты',
+    emoji: '💠',
+    color: '#c084fc',
+    desc: 'Редкое сырьё Чародейства',
+    category: 'resource',
+    sellPrice: 0.02,
+  },
   magic_ink: { id: 'magic_ink', name: 'Магические Чернила', emoji: '🖋️', color: '#a855f7', desc: '15 мин языка → +1 чернило', category: 'craft', sellPrice: 0.01 },
   cheatmeal_scroll: {
     id: 'cheatmeal_scroll',
@@ -85,6 +225,18 @@ export const emptyInventory = () => Object.fromEntries(Object.keys(ITEMS).map((i
 
 export const invCount = (p, id) => p.inventory?.[id] ?? 0;
 
+export function listInventory(player) {
+  const inv = player?.inventory ?? {};
+  const rows = [];
+  for (const [id, raw] of Object.entries(inv)) {
+    const count = Number(raw) || 0;
+    if (count <= 0) continue;
+    const item = ITEMS[id] ?? player?.generatedGear?.[id];
+    if (item) rows.push({ item, count });
+  }
+  return rows;
+}
+
 export function canAfford(p, cost) {
   return Object.entries(cost).every(([id, n]) => invCount(p, id) >= n);
 }
@@ -108,12 +260,155 @@ const p3 = (n) => Math.round(n * 1000) / 1000;
 
 /* ---------- точки мира ---------- */
 
+const MS_15 = 15 * 60 * 1000;
+const MS_30 = 30 * 60 * 1000;
+const MS_45 = 45 * 60 * 1000;
+
+/** Категории сбора: стабильный id (для КД), пул названий мест + таблица дропа. */
 export const WORLD_NODES = [
-  { id: 'copper_vein', name: 'Медная рудная жила', emoji: '🪨', color: '#b45309', apCost: 2, cooldownMs: 30 * 60 * 1000, loot: { item: 'copper_ore', min: 1, max: 2 }, blurb: 'Жила мерцает тусклым металлом' },
-  { id: 'ancient_forest', name: 'Вековой лес', emoji: '🌲', color: '#15803d', apCost: 2, cooldownMs: 30 * 60 * 1000, loot: { item: 'wood', min: 1, max: 3 }, blurb: 'Сучья и стволы, полные смолы' },
-  { id: 'herb_bush', name: 'Куст целебных трав', emoji: '🌿', color: '#22c55e', apCost: 1, cooldownMs: 15 * 60 * 1000, loot: { item: 'wild_herbs', min: 1, max: 2 }, blurb: 'Аромат, от которого кружится голова' },
-  { id: 'boiling_pool', name: 'Бурлящая заводь', emoji: '🐟', color: '#0ea5e9', apCost: 1, cooldownMs: 15 * 60 * 1000, loot: { item: 'raw_fish', min: 1, max: 2 }, blurb: 'Вода кипит — рыба сама прыгает в руки' },
+  {
+    id: 'copper_vein',
+    emoji: '🪨',
+    color: '#b45309',
+    apCost: 2,
+    cooldownMs: MS_30,
+    sites: [
+      { name: 'Медная рудная жила', blurb: 'Жила мерцает тусклым металлом' },
+      { name: 'Заброшенный карьер', blurb: 'Стены иссечены кирками давно ушедших охотников' },
+      { name: 'Скалистый уступ', blurb: 'В трещинах блестит руда под полуденным солнцем' },
+      { name: 'Шахта Гулкого эха', blurb: 'Каждый удар отдаётся гулом в глубине' },
+      { name: 'Железная осыпь', blurb: 'Красноватая пыль оседает на перчатках' },
+      { name: 'Оловянный разлом', blurb: 'Мягкий металл легко отделяется от породы' },
+    ],
+    lootTable: [
+      { item: 'copper_ore', min: 1, max: 2, weight: 50 },
+      { item: 'iron_ore', min: 1, max: 2, weight: 35 },
+      { item: 'tin_ore', min: 1, max: 1, weight: 15 },
+    ],
+    bonus: { chance: 0.1, item: 'mana_dust', min: 1, max: 1 },
+  },
+  {
+    id: 'ancient_forest',
+    emoji: '🌲',
+    color: '#15803d',
+    apCost: 2,
+    cooldownMs: MS_30,
+    sites: [
+      { name: 'Вековой лес', blurb: 'Сучья и стволы, полные смолы' },
+      { name: 'Туманная роща', blurb: 'Стволы скрыты пеленой — слышен только треск коры' },
+      { name: 'Бурелом у кромки', blurb: 'Буря уже сделала половину работы' },
+      { name: 'Сосновый хребет', blurb: 'Хвоя хрустит под ногами, смола липнет к топору' },
+      { name: 'Дубовая чаща', blurb: 'Тяжёлые стволы не сдаются без боя' },
+      { name: 'Пепельный лес', blurb: 'Чёрные стволы хранят тепло старого пожара' },
+    ],
+    lootTable: [
+      { item: 'wood', min: 1, max: 3, weight: 55 },
+      { item: 'hardwood', min: 1, max: 2, weight: 30 },
+      { item: 'resin', min: 1, max: 2, weight: 15 },
+    ],
+  },
+  {
+    id: 'herb_bush',
+    emoji: '🌿',
+    color: '#22c55e',
+    apCost: 1,
+    cooldownMs: MS_15,
+    sites: [
+      { name: 'Куст целебных трав', blurb: 'Аромат, от которого кружится голова' },
+      { name: 'Лунная поляна', blurb: 'Лепестки светятся слабым серебристым светом' },
+      { name: 'Тенистый овраг', blurb: 'Корни тянутся к тёмной влаге' },
+      { name: 'Грибной косогор', blurb: 'Шляпки мерцают, будто живые угольки' },
+      { name: 'Аптекарский склон', blurb: 'Здесь когда-то собирали зелья ученики' },
+      { name: 'Роса на мху', blurb: 'Мелкие ростки прячутся между камней' },
+    ],
+    lootTable: [
+      { item: 'wild_herbs', min: 1, max: 2, weight: 45 },
+      { item: 'moonpetal', min: 1, max: 2, weight: 25 },
+      { item: 'shadowroot', min: 1, max: 1, weight: 15 },
+      { item: 'glowcap', min: 1, max: 2, weight: 15 },
+    ],
+  },
+  {
+    id: 'boiling_pool',
+    emoji: '🐟',
+    color: '#0ea5e9',
+    apCost: 1,
+    cooldownMs: MS_15,
+    sites: [
+      { name: 'Бурлящая заводь', blurb: 'Вода кипит — рыба сама прыгает в руки' },
+      { name: 'Тихая заводь', blurb: 'Гладь воды отражает небо, пока не дёрнется поплавок' },
+      { name: 'Каменистый берег', blurb: 'Между валунами прячутся мидии и водоросли' },
+      { name: 'Устье туманной реки', blurb: 'Течение несёт добычу прямо к сети' },
+      { name: 'Солёная лагуна', blurb: 'Воздух пахнет йодом и рыбьей чешуёй' },
+      { name: 'Мост Старого дока', blurb: 'Под сваями плещется жирная добыча' },
+    ],
+    lootTable: [
+      { item: 'raw_fish', min: 1, max: 2, weight: 55 },
+      { item: 'river_mussel', min: 1, max: 2, weight: 25 },
+      { item: 'kelp', min: 1, max: 2, weight: 20 },
+    ],
+  },
+  {
+    id: 'hunting_trail',
+    emoji: '🦌',
+    color: '#d97706',
+    apCost: 2,
+    cooldownMs: MS_30,
+    sites: [
+      { name: 'Звериная тропа', blurb: 'Свежие следы ведут в чащу' },
+      { name: 'Охотничий перевал', blurb: 'Ветер несёт запах шкуры и крови' },
+      { name: 'Логово у скал', blurb: 'Кости и клочья шерсти у входа' },
+      { name: 'Сумеречная опушка', blurb: 'Звери выходят на водопой на закате' },
+      { name: 'Костяной яр', blurb: 'Здесь охотились задолго до Системы' },
+    ],
+    lootTable: [
+      { item: 'raw_hide', min: 1, max: 2, weight: 60 },
+      { item: 'beast_bone', min: 1, max: 2, weight: 40 },
+    ],
+  },
+  {
+    id: 'rift_outcrop',
+    emoji: '💠',
+    color: '#818cf8',
+    apCost: 3,
+    cooldownMs: MS_45,
+    sites: [
+      { name: 'Разлом маны', blurb: 'Воздух искрит — пыль оседает на ладонях' },
+      { name: 'Кристальный утёс', blurb: 'Грани режут свет на фиолетовые осколки' },
+      { name: 'Пустотный карман', blurb: 'Звук пропадает, остаётся только гул Системы' },
+      { name: 'Обсидиановый шрам', blurb: 'Земля когда-то треснула от чужого портала' },
+      { name: 'Сияющая расселина', blurb: 'Мана стекает по стенам, как роса' },
+    ],
+    lootTable: [
+      { item: 'mana_dust', min: 1, max: 2, weight: 75 },
+      { item: 'void_shard', min: 1, max: 1, weight: 25 },
+    ],
+  },
 ];
+
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Название и описание точки на сегодня (меняются каждый день). */
+export function pickNodeSite(node, now = Date.now()) {
+  const sites = node.sites;
+  if (!sites?.length) {
+    return { name: node.name ?? 'Точка сбора', blurb: node.blurb ?? '' };
+  }
+  const idx = hashStr(`${dayKey(now)}:${node.id}`) % sites.length;
+  return sites[idx];
+}
+
+export function nodeLootPreview(node) {
+  const table = node.lootTable?.length ? node.lootTable : node.loot ? [node.loot] : [];
+  return table.map((row) => ITEMS[row.item]).filter(Boolean);
+}
 
 export function nodeCooldownLeft(p, nodeId, now = Date.now()) {
   return Math.max(0, (p.nodeCooldowns?.[nodeId] ?? 0) - now);
@@ -126,8 +421,32 @@ export function formatCooldown(ms) {
   return m > 0 ? `${m}:${String(r).padStart(2, '0')}` : `0:${String(r).padStart(2, '0')}`;
 }
 
-function rollLoot(loot) {
-  return { item: loot.item, amount: loot.min + Math.floor(Math.random() * (loot.max - loot.min + 1)) };
+function rollAmount(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function pickWeighted(table) {
+  const total = table.reduce((s, row) => s + (row.weight ?? 1), 0);
+  let roll = Math.random() * total;
+  for (const row of table) {
+    roll -= row.weight ?? 1;
+    if (roll <= 0) return row;
+  }
+  return table[table.length - 1];
+}
+
+function rollLootTable(node) {
+  const table = node.lootTable?.length ? node.lootTable : node.loot ? [{ ...node.loot, weight: 1 }] : [];
+  if (!table.length) return [];
+  const primary = pickWeighted(table);
+  const drops = [{ item: primary.item, amount: rollAmount(primary.min, primary.max) }];
+  if (node.bonus && Math.random() < (node.bonus.chance ?? 0)) {
+    drops.push({
+      item: node.bonus.item,
+      amount: rollAmount(node.bonus.min ?? 1, node.bonus.max ?? 1),
+    });
+  }
+  return drops;
 }
 
 export function gatherNode(p, nodeId) {
@@ -138,16 +457,23 @@ export function gatherNode(p, nodeId) {
   if (left > 0) return { error: `Точка восстанавливается · ${formatCooldown(left)}` };
   if (p.ap < node.apCost) return { error: 'Недостаточно энергии! Выполните силовую тренировку через [+]' };
 
-  const drop = rollLoot(node.loot);
+  const site = pickNodeSite(node, now);
+  const drops = rollLootTable(node);
+  let inv = p.inventory ?? emptyInventory();
+  for (const drop of drops) inv = addItem(inv, drop.item, drop.amount);
+
+  const lootText = drops.map((d) => `+${d.amount} ${ITEMS[d.item]?.name ?? d.item}`).join(', ');
+
   return {
     player: {
       ...p,
       ap: p.ap - node.apCost,
-      inventory: addItem(p.inventory ?? emptyInventory(), drop.item, drop.amount),
+      inventory: inv,
       nodeCooldowns: { ...(p.nodeCooldowns ?? {}), [nodeId]: now + node.cooldownMs },
       world: { ...(p.world ?? {}), gathered: (p.world?.gathered ?? 0) + 1 },
     },
-    events: [{ type: 'gain', text: `+${drop.amount} ${ITEMS[drop.item].name}` }],
+    events: [{ type: 'gain', text: `${site.name}: ${lootText}` }],
+    daily: { action: 'gather', amount: 1 },
   };
 }
 

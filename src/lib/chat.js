@@ -78,3 +78,23 @@ export function subscribeChat(onInsert) {
     }
   };
 }
+
+const seenKey = (userId) => `fitnessrpg.chat.seen.${userId}`;
+
+export function readChatSeen(userId) {
+  if (!userId) return '';
+  try {
+    return localStorage.getItem(seenKey(userId)) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function writeChatSeen(userId, stamp) {
+  if (!userId || !stamp) return;
+  try {
+    localStorage.setItem(seenKey(userId), stamp);
+  } catch {
+    /* ignore */
+  }
+}

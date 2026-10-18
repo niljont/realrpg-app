@@ -11,7 +11,7 @@ import {
   rankLevelHint,
 } from '../lib/breaches';
 import { attackApCost, getGearBonuses } from '../lib/equipment';
-import { ITEMS, WORLD_NODES, formatCooldown, nodeCooldownLeft } from '../lib/world';
+import { WORLD_NODES, formatCooldown, nodeCooldownLeft, nodeLootPreview, pickNodeSite } from '../lib/world';
 
 function Segmented({ value, onChange, options }) {
   return (
@@ -459,7 +459,9 @@ function NodeCard({ node, player, now, onGather }) {
   const left = nodeCooldownLeft(player, node.id, now);
   const ready = left <= 0;
   const enough = player.ap >= node.apCost;
-  const item = ITEMS[node.loot.item];
+  const site = pickNodeSite(node, now);
+  const lootItems = nodeLootPreview(node);
+  const lootLabel = lootItems.map((it) => `${it.emoji} ${it.name}`).join(' · ');
   return (
     <div className="rounded-xl border bg-zinc-900/70 p-3" style={{ borderColor: ready ? `${node.color}66` : '#27272a', opacity: ready ? 1 : 0.72 }}>
       <div className="flex items-start gap-3">
@@ -467,16 +469,13 @@ function NodeCard({ node, player, now, onGather }) {
           {node.emoji}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-display text-sm text-zinc-100">{node.name}</div>
-          <div className="mt-0.5 text-[11px] text-zinc-500">{node.blurb}</div>
+          <div className="font-display text-sm text-zinc-100">{site.name}</div>
+          <div className="mt-0.5 text-[11px] text-zinc-500">{site.blurb}</div>
           <div className="mt-1.5 flex flex-wrap gap-2 text-[10px]">
             <span className="inline-flex items-center gap-1 rounded border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 font-bold text-blue-300">
               <Zap size={10} /> {node.apCost} AP
             </span>
-            <span className="text-zinc-400">
-              → {item.emoji} {item.name} ×{node.loot.min}
-              {node.loot.max > node.loot.min ? `–${node.loot.max}` : ''}
-            </span>
+            <span className="text-zinc-400">→ {lootLabel}</span>
           </div>
         </div>
       </div>
@@ -555,7 +554,9 @@ export default function WorldScreen({
         )}
         {tab === 'gather' && (
           <div className="space-y-2">
-            <p className="text-[11px] text-zinc-500">Сбор тратит AP. Ресурсы идут в сумку (вкладка Профессии).</p>
+            <p className="text-[11px] text-zinc-500">
+              Сбор тратит AP. Места меняются каждый день, ресурсы — в сумку (потом для профессий).
+            </p>
             {WORLD_NODES.map((node) => (
               <NodeCard key={node.id} node={node} player={player} now={now} onGather={onGather} />
             ))}

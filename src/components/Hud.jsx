@@ -73,7 +73,7 @@ function TipCard({ title, body, color, onClose }) {
   );
 }
 
-export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onResetAccount, onRename }) {
+export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onResetAccount, onRename, onChangeGender }) {
   const { level, xp, need } = levelFromXp(player.xp);
   const maxHpVal = player.breach?.active ? (player.breach.playerMaxHp ?? playerMaxHp(player)) : playerMaxHp(player);
   const hpVal = player.breach?.active ? (player.breach.playerHp ?? getPlayerHp(player)) : getPlayerHp(player);
@@ -165,20 +165,20 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
           <h1 className="truncate font-display text-xl leading-tight text-zinc-50">{player.name}</h1>
           <div className="text-xs text-zinc-400">
             Уровень <span className="glow-text font-display text-sm text-neon">{level}</span>
-            {(player.inscriptionXp ?? 0) > 0 && (
-              <span className="ml-2 text-violet-400/80">· Начертание {player.inscriptionXp}</span>
-            )}
           </div>
         </div>
         <div className="flex shrink-0 items-start gap-1.5">
-          <div
+          <button
+            type="button"
+            onClick={() => toggleTip({ id: 'palium', type: 'palium' })}
             className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold tabular-nums"
             style={{ borderColor: `${PALIUM_COLOR}55`, color: PALIUM_COLOR, background: `${PALIUM_COLOR}14`, boxShadow: `0 0 12px ${PALIUM_COLOR}33` }}
             title="Палиум"
+            aria-label="Что такое Палиум"
           >
             <Gem size={13} style={{ filter: `drop-shadow(0 0 4px ${PALIUM_COLOR})` }} />
             {formatPalium(player.palium)}
-          </div>
+          </button>
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -190,6 +190,15 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
           </button>
         </div>
       </div>
+
+      {tip?.type === 'palium' && (
+        <TipCard
+          title="Палиум"
+          color={PALIUM_COLOR}
+          body="Валюта Системы. Падает с Брешей, контракта, босса дня и продажи добычи. Им платят в магазине за снаряжение и расходники. Считается тысячными: 0.001 — самая мелкая монета."
+          onClose={() => setTip(null)}
+        />
+      )}
 
       {tip?.type === 'buff' && tip.info && (
         <TipCard
@@ -258,6 +267,7 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
         onSignOut={onSignOut}
         onResetAccount={onResetAccount}
         onRename={onRename}
+        onChangeGender={onChangeGender}
       />
     )}
     </>
