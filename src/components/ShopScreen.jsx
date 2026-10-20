@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowDownUp, Gem, X } from 'lucide-react';
 import { PALIUM_COLOR, formatPalium, getStats } from '../lib/game';
 import { msUntilVendorRefresh } from '../lib/loot';
+import GearCompare from './GearCompare';
 import {
   GRIP_LABELS,
   ITEM_QUALITY,
@@ -12,6 +13,7 @@ import {
   SLOT_LABELS,
   formatGearBonusLines,
   formatWeaponDamageLine,
+  isGearItem,
   qualityColor,
   reqStatus,
 } from '../lib/equipment';
@@ -191,7 +193,7 @@ function QtyBox({ value, onChange }) {
   );
 }
 
-function GearCard({ item, player, onBuy, flash }) {
+function GearCard({ item, player, onBuy, flash, onInspect }) {
   const color = qualityColor(item);
   const reqs = reqStatus(player, item);
   const stackable = !item.generated;
@@ -205,7 +207,7 @@ function GearCard({ item, player, onBuy, flash }) {
 
   return (
     <div className="rounded-xl border bg-zinc-900/70 p-3" style={{ borderColor: `${color}44` }}>
-      <div className="flex items-start gap-3">
+      <button type="button" onClick={() => onInspect?.(item)} className="flex w-full items-start gap-3 text-left">
         <div
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-2xl"
           style={{ background: `${color}18` }}
@@ -240,7 +242,7 @@ function GearCard({ item, player, onBuy, flash }) {
             ))}
           </div>
         </div>
-      </div>
+      </button>
       <div className="mt-3 flex gap-2">
         {stackable && <QtyBox value={qty} onChange={setQty} />}
         <button
@@ -301,6 +303,7 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
   const [spendFx, setSpendFx] = useState(null);
   const [balancePulse, setBalancePulse] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [inspect, setInspect] = useState(null);
   const stats = getStats(player);
 
   const isConsumable = tab === 'consumable';
@@ -459,6 +462,7 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
                   player={player}
                   onBuy={handleBuyGear}
                   flash={flashId === item.id}
+                  onInspect={setInspect}
                 />
               ))
             )}
@@ -473,6 +477,7 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
                 player={player}
                 onBuy={handleBuyGear}
                 flash={flashId === item.id}
+                onInspect={setInspect}
               />
             ))}
           </div>
@@ -486,6 +491,7 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
                 player={player}
                 onBuy={handleBuyGear}
                 flash={flashId === item.id}
+                onInspect={setInspect}
               />
             ))}
           </div>
@@ -499,6 +505,7 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
                 player={player}
                 onBuy={handleBuyGear}
                 flash={flashId === item.id}
+                onInspect={setInspect}
               />
             ))}
           </div>
@@ -517,6 +524,24 @@ export default function ShopScreen({ player, onClose, onBuyGear, onBuyConsumable
           </div>
         )}
       </div>
+      {inspect && isGearItem(inspect) && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+          onClick={() => setInspect(null)}
+        >
+          <div className="system-panel modal-in w-full max-w-sm p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-start justify-between gap-2">
+              <div className="font-display text-sm" style={{ color: qualityColor(inspect) }}>
+                {inspect.emoji} {inspect.name}
+              </div>
+              <button type="button" onClick={() => setInspect(null)} className="text-zinc-500" aria-label="Закрыть">
+                <X size={16} />
+              </button>
+            </div>
+            <GearCompare item={inspect} player={player} rightLabel="Товар" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

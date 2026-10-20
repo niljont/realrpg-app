@@ -13,6 +13,42 @@ import {
 import { attackApCost, getGearBonuses } from '../lib/equipment';
 import { WORLD_NODES, formatCooldown, nodeCooldownLeft, nodeLootPreview, pickNodeSite } from '../lib/world';
 
+/** Плашка после полной зачистки Бреши. */
+export function BreachClearCard({ reward, onClose }) {
+  const items = reward?.items ?? [];
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/75 p-4 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div className="system-panel modal-in w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 text-center font-display text-[11px] tracking-[0.28em] text-neon/80">ПРОТОКОЛ ЗАКРЫТИЯ</div>
+        <p className="text-center font-display text-base leading-snug text-zinc-100">Поздравляем, Носитель.</p>
+        <p className="mt-2 text-center text-sm leading-relaxed text-zinc-300">
+          Брешь «{reward?.name}» закрыта. Добыча зафиксирована Системой.
+        </p>
+        <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-center text-sm font-bold text-amber-200">
+          +{formatPalium(reward?.palium ?? 0)} Палиум
+        </div>
+        {items.length > 0 ? (
+          <ul className="mt-3 space-y-1.5">
+            {items.map((item) => (
+              <li key={item.id} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                <span className="min-w-0 truncate text-sm text-zinc-100">
+                  {item.emoji} {item.name}
+                </span>
+                <span className="shrink-0 font-display text-sm text-neon">×{item.count}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-center text-[12px] text-zinc-500">Предметов в добыче нет.</p>
+        )}
+        <button type="button" onClick={onClose} className="mt-4 w-full rounded-xl bg-neon py-3 text-sm font-bold text-zinc-950">
+          Принять
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Segmented({ value, onChange, options }) {
   return (
     <div className="flex gap-1 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900/70 p-1">

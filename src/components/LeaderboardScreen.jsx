@@ -58,6 +58,24 @@ function scoreLabel(mode, row) {
   }
 }
 
+const ONLINE_MS = 90_000;
+
+function lastSeenLabel(ts, now) {
+  const t = Date.parse(ts || '');
+  if (!Number.isFinite(t)) return 'был в сети давно';
+  const min = Math.floor(Math.max(0, now - t) / 60000);
+  if (min < 60) return `был в сети ${Math.max(1, min)} мин назад`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `был в сети ${hours} ч назад`;
+  return `был в сети ${Math.floor(hours / 24)} дн. назад`;
+}
+
+function isOnline(ts, now, mine) {
+  if (mine) return true;
+  const t = Date.parse(ts || '');
+  return Number.isFinite(t) && now - t < ONLINE_MS;
+}
+
 function formatUpdatedAt(ts) {
   if (!ts) return '';
   try {
@@ -75,6 +93,7 @@ export default function LeaderboardScreen({ player }) {
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
   const [fetchedAt, setFetchedAt] = useState(null);
+  const [now, setNow] = useState(Date.now());
   const [viewPlayer, setViewPlayer] = useState(null);
   const reqId = useRef(0);
   const playerRef = useRef(player);
@@ -119,6 +138,14 @@ export default function LeaderboardScreen({ player }) {
 
   useEffect(() => {
     load({ pushFirst: true });
+  }, [load]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNow(Date.now());
+      load({ pushFirst: false });
+    }, 60_000);
+    return () => clearInterval(id);
   }, [load]);
 
   const sorted = useMemo(() => sortLeaderboard(rows, tab).slice(0, 50), [rows, tab]);
@@ -198,6 +225,8 @@ export default function LeaderboardScreen({ player }) {
           <div className="space-y-2">
             {sorted.map((row, i) => {
               const mine = user?.id === row.id;
+              const hidden = Boolean(row.hide_activity) && !mine;
+              const online = !hidden && isOnline(row.updated_at, now, mine);
               const color = rankColor(i);
               const title = rowTitle(row);
               return (
@@ -217,7 +246,13 @@ export default function LeaderboardScreen({ player }) {
                       {i < 3 ? <Medal size={16} /> : `#${i + 1}`}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        {online && (
+                          <span
+                            className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"
+                            title="В сети"
+                          />
+                        )}
                         <span className="truncate font-display text-sm text-zinc-100">{row.username}</span>
                         {title && (
                           <span className="truncate text-[10px] font-bold tracking-wide" style={{ color: title.color }}>
@@ -230,7 +265,9 @@ export default function LeaderboardScreen({ player }) {
                         STR {row.strength} · END {row.endurance} · AGI {row.agility} · INT {row.intelligence} · WIL{' '}
                         {row.willpower}
                       </div>
-                      <div className="mt-0.5 text-[9px] text-zinc-600">нажми · профиль</div>
+                      {!online && !hidden && (
+                        <div className="mt-0.5 text-[10px] text-zinc-500">{lastSeenLabel(row.updated_at, now)}</div>
+                      )}
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="font-display text-sm" style={{ color: accent }}>

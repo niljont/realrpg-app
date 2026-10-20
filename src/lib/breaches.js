@@ -253,9 +253,9 @@ export function ensureRadar(p, now = Date.now()) {
 
 /* ---------- банк шагов ---------- */
 
-/** 1000 шагов = 10 END. */
+/** 1000 шагов = 5 END. */
 export const STEPS_PER_END_BLOCK = 1000;
-export const END_PER_STEPS_BLOCK = 10;
+export const END_PER_STEPS_BLOCK = 5;
 
 export function emptySteps() {
   return { date: '', today: 0, bank: 0, credited: 0 };
@@ -872,7 +872,25 @@ function finishBreach(p, { keepLoot, cleared, defeated = false }, events) {
     events.push({ type: 'energy', text: `Брешь «${session.name}» закрыта · HP ${outHp}/${max}` });
   }
 
-  return { player: next, events, ...(cleared ? { daily: { action: 'breach', amount: 1 } } : {}) };
+  const breachReward = cleared
+    ? {
+        name: session.name,
+        palium: lootPalium,
+        items: Object.entries(lootItems).map(([id, count]) => ({
+          id,
+          count,
+          name: ITEMS[id]?.name ?? id,
+          emoji: ITEMS[id]?.emoji ?? '📦',
+        })),
+      }
+    : null;
+
+  return {
+    player: next,
+    events,
+    ...(breachReward ? { breachReward } : {}),
+    ...(cleared ? { daily: { action: 'breach', amount: 1 } } : {}),
+  };
 }
 
 export function formatSteps(n) {

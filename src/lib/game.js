@@ -39,7 +39,7 @@ export const EXERCISES = {
     { id: 'jumprope', name: 'Скакалка', unit: 'прыжк.', rate: 0.2 },
     { id: 'burpees', name: 'Берпи', unit: 'повт.', rate: 2 },
     { id: 'squats', name: 'Выпрыгивания', unit: 'повт.', rate: 1 },
-    { id: 'stretching', name: 'Растяжка', unit: 'мин', rate: 1.5 },
+    { id: 'stretching', name: 'Растяжка', unit: 'мин', rate: 5 },
   ],
   INT: [
     { id: 'reading', name: 'Чтение', unit: 'мин', rate: 1 },
@@ -1117,6 +1117,7 @@ export function hydratePlayer(p) {
     daily: p.daily?.date ? p.daily : null,
     returnOffer: p.returnOffer?.date ? p.returnOffer : null,
     bossClaimDate: p.bossClaimDate ?? '',
+    hideActivity: Boolean(p.hideActivity),
     radar: p.radar ?? null,
     breach: p.breach?.active ? p.breach : null,
     world: { gathered: 0, cooked: 0, breaches: 0, breachWins: 0, ...(p.world ?? {}) },
@@ -1323,6 +1324,15 @@ function withQuestCompletion(p, questId, today) {
           }
         : q,
     ),
+  };
+}
+
+/** Скрыть от других онлайн и записи тренировок. */
+export function setHideActivity(p, hidden) {
+  const on = Boolean(hidden);
+  return {
+    player: { ...p, hideActivity: on },
+    events: [{ type: 'system', text: on ? 'Активность скрыта от других игроков' : 'Активность снова видна другим' }],
   };
 }
 

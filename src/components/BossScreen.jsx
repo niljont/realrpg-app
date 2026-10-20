@@ -1,5 +1,5 @@
 import { Skull } from 'lucide-react';
-import { bossReasonLabel, isBossSpectator } from '../lib/daily';
+import { bossDamageBoard, bossReasonLabel, isBossSpectator } from '../lib/daily';
 import { formatPalium, STAT_META } from '../lib/game';
 import {
   GRIP_LABELS,
@@ -102,6 +102,7 @@ export default function BossScreen({ player, boss, onClaimBoss }) {
   const spectator = isBossSpectator(player?.name);
   const bossReady = boss && !spectator && bossHp === 0 && (boss.mine ?? 0) > 0 && player.bossClaimDate !== today;
   const log = boss?.log ?? [];
+  const board = bossHp === 0 ? bossDamageBoard(boss) : [];
 
   return (
     <div className="space-y-4">
@@ -142,6 +143,29 @@ export default function BossScreen({ player, boss, onClaimBoss }) {
                   ? `Общий бой не подключился: ${boss.error}`
                   : 'Общий бой и лог включатся после нового SQL из supabase/daily_boss.sql. Пока удары видны только на этом устройстве.'}
               </p>
+            )}
+            {bossHp === 0 && (
+              <div className="space-y-1.5">
+                <h3 className="font-display text-[10px] tracking-widest text-zinc-400">ТАБЛИЦА УРОНА</h3>
+                {board.length === 0 ? (
+                  <p className="text-[11px] text-zinc-500">Ударов нет.</p>
+                ) : (
+                  <ol className="space-y-1">
+                    {board.map((row, index) => (
+                      <li
+                        key={row.username}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-950/50 px-2.5 py-1.5"
+                      >
+                        <span className="min-w-0 truncate text-xs text-zinc-100">
+                          <span className="mr-2 font-display text-zinc-500">{index + 1}</span>
+                          {row.username || 'Игрок'}
+                        </span>
+                        <span className="shrink-0 font-display text-sm text-red-300">{Math.round(row.damage || 0)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
             )}
             <button
               type="button"

@@ -72,6 +72,31 @@ export function bossReasonLabel(reason) {
   return BOSS_REASONS[reason] || 'Удар';
 }
 
+function addBossBoard(board, username, damage) {
+  const name = username || 'Игрок';
+  const list = Array.isArray(board) ? board.map((row) => ({ ...row })) : [];
+  const index = list.findIndex((row) => row.username === name);
+  if (index < 0) list.push({ username: name, damage });
+  else list[index].damage = Math.round(list[index].damage || 0) + damage;
+  list.sort((a, b) => (b.damage || 0) - (a.damage || 0));
+  return list;
+}
+
+/** Сумма урона по никам. Берёт board с сервера, иначе складывает журнал. */
+export function bossDamageBoard(boss) {
+  if (Array.isArray(boss?.board) && boss.board.length > 0) {
+    return [...boss.board].sort((a, b) => (b.damage || 0) - (a.damage || 0));
+  }
+  const totals = new Map();
+  for (const row of boss?.log ?? []) {
+    const name = row.username || 'Игрок';
+    totals.set(name, (totals.get(name) || 0) + Math.round(row.damage || 0));
+  }
+  return [...totals.entries()]
+    .map(([username, damage]) => ({ username, damage }))
+    .sort((a, b) => b.damage - a.damage);
+}
+
 function bossTitle(day) {
   return BOSS_NAMES[hashStr(`boss|${day}`) % BOSS_NAMES.length];
 }
@@ -80,7 +105,7 @@ export function bossDamageFor(action, amount) {
   const n = Math.max(0, Number(amount) || 0);
   if (action === 'train' || action === 'quest') return Math.min(120, Math.max(8, Math.round(n)));
   if (action === 'steps') return Math.min(80, Math.round(n / 80));
-  if (action === 'gather') return 25;
+  if (action === 'gather') return 15;
   if (action === 'breach') return 70;
   if (action === 'craft') return 20;
   return 0;
@@ -301,7 +326,7 @@ function localBoss(day, damage, reason = 'train', username = 'Игрок') {
     state = null;
   }
   if (!state || state.day !== day || state.maxHp === 1600) {
-    state = { day, name: bossTitle(day), maxHp: BOSS_HP, hp: BOSS_HP, strikes: 0, mine: 0, fighters: 0, shared: false, log: [] };
+    state = { day, name: bossTitle(day), maxHp: BOSS_HP, hp: BOSS_HP, strikes: 0, mine: 0, fighters: 0, shared: false, log: [], board: [] };
   }
   const dmg = isBossSpectator(username) ? 0 : Math.max(0, Math.round(damage) || 0);
   if (dmg > 0 && state.hp > 0) {
@@ -315,6 +340,11 @@ function localBoss(day, damage, reason = 'train', username = 'Игрок') {
         { id: `${Date.now()}`, username, damage: dmg, reason, createdAt: new Date().toISOString() },
         ...(state.log ?? []),
       ].slice(0, 50),
+      board: addBossBoard(
+        Array.isArray(state.board) && state.board.length ? state.board : bossDamageBoard({ log: state.log }),
+        username,
+        dmg,
+      ),
     };
   }
   try {
@@ -357,6 +387,7 @@ export async function strikeDailyBoss(day, damage = 0, reason = 'train', usernam
       shared: true,
       error: '',
       log: Array.isArray(body.log) ? body.log : [],
+      board: Array.isArray(body.board) ? body.board : bossDamageBoard({ log: body.log }),
     };
   } catch (err) {
     return fallback(err?.message || 'Сеть недоступна');

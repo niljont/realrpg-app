@@ -5,7 +5,7 @@ import Hud from './components/Hud';
 import EnergyModal from './components/EnergyModal';
 import StatusScreen from './components/StatusScreen';
 import TrainingScreen from './components/TrainingScreen';
-import WorldScreen from './components/WorldScreen';
+import WorldScreen, { BreachClearCard } from './components/WorldScreen';
 import ProfessionsScreen from './components/ProfessionsScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import ChatScreen from './components/ChatScreen';
@@ -23,6 +23,7 @@ import {
   loadPlayer,
   removeCustomQuest,
   changeGender,
+  setHideActivity,
   renamePlayer,
   savePlayer,
   sealResult,
@@ -52,7 +53,8 @@ import { craftRecipe } from './lib/crafting';
 import { applyHpRegen, buyGear, equipItem, unequipSlot } from './lib/equipment';
 import { ensureVendorStock } from './lib/loot';
 import { fetchChatMessages, readChatSeen, subscribeChat, writeChatSeen } from './lib/chat';
-import { applyDailyProgress, claimBossReward, claimContract, claimReturn, ensureDaily, strikeDailyBoss } from './lib/daily';
+import { applyDailyProgress, claimBossReward, claimContract, claimReturn, ensureDaily, isBossSpectator, strikeDailyBoss } from './lib/daily';
+import { touchPresence } from './lib/profileSync';
 import {
   breachCombatContinue,
   breachCombatDefend,
@@ -138,8 +140,12 @@ export default function App() {
   const [justUnlocked, setJustUnlocked] = useState(null);
   const [boss, setBoss] = useState(null);
   const [bossReward, setBossReward] = useState(null);
+  const [breachReward, setBreachReward] = useState(null);
   const [chatUnread, setChatUnread] = useState(false);
   const syncTimer = useRef(null);
+  const playerRef = useRef(null);
+  const bossClaimDay = useRef('');
+  playerRef.current = player;
 
   const notify = useCallback((events) => {
     const items = (events ?? []).filter((e) => e.type !== 'achievement').map((e) => ({ ...e, id: crypto.randomUUID() }));
@@ -154,6 +160,25 @@ export default function App() {
       setStatusOpenRequest('achievements');
     }
   }, []);
+
+  const grantFallenBoss = useCallback((state) => {
+    const today = dayKey();
+    const current = playerRef.current;
+    if (!state || (state.hp ?? 1) > 0 || !current) return;
+    if (isBossSpectator(current.name)) return;
+    if ((state.mine ?? 0) <= 0) return;
+    if (current.bossClaimDate === today || bossClaimDay.current === today) return;
+    bossClaimDay.current = today;
+    const result = claimBossReward(current, state);
+    if (result.error) {
+      bossClaimDay.current = '';
+      return;
+    }
+    playerRef.current = result.player;
+    setPlayer(result.player);
+    if (result.reward) setBossReward(result.reward);
+    if (result.events?.length) notify(result.events);
+  }, [notify]);
 
   const commit = useCallback(
     (result) => {
@@ -170,14 +195,16 @@ export default function App() {
         if (tracked.bossDamage > 0) {
           strikeDailyBoss(dayKey(), tracked.bossDamage, result.daily?.action || 'train', next.name).then((state) => {
             if (state) setBoss(state);
+            grantFallenBoss(state);
           });
         }
       }
+      playerRef.current = next;
       setPlayer(next);
       if (events.length) notify(events);
       return true;
     },
-    [notify],
+    [notify, grantFallenBoss],
   );
 
   // Загрузка локального сейва / профиля при входе.
@@ -253,6 +280,16 @@ export default function App() {
     };
   }, [player, storageKey, user?.id, syncPlayerToCloud]);
 
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const beat = () => {
+      if (document.visibilityState === 'visible') touchPresence(user.id);
+    };
+    beat();
+    const id = setInterval(beat, 45_000);
+    return () => clearInterval(id);
+  }, [user?.id]);
+
   // Пассивный реген AP, утренний сброс, радар.
   useEffect(() => {
     if (!player) return undefined;
@@ -281,7 +318,9 @@ export default function App() {
     let cancel = false;
     const pull = () => {
       strikeDailyBoss(dayKey(), 0, 'train', player?.name).then((state) => {
-        if (!cancel && state) setBoss(state);
+        if (cancel || !state) return;
+        setBoss(state);
+        grantFallenBoss(state);
       });
     };
     pull();
@@ -290,7 +329,7 @@ export default function App() {
       cancel = true;
       clearInterval(id);
     };
-  }, [Boolean(player), player?.name, tab]);
+  }, [Boolean(player), player?.name, tab, grantFallenBoss]);
 
   const markChatSeen = useCallback(
     (stamp) => {
@@ -402,6 +441,15 @@ export default function App() {
               }
               return { ok: true };
             }}
+            onHideActivity={async (hidden) => {
+              const result = setHideActivity(player, hidden);
+              const next = stampPlayer(result.player);
+              setPlayer(next);
+              notify(result.events ?? []);
+              const sync = await syncPlayerToCloud(next);
+              if (sync && sync.ok === false) return { error: sync.error || 'Не удалось сохранить' };
+              return { ok: true };
+            }}
             onRename={async (newName) => {
               const result = renamePlayer(player, newName);
               if (result.error) return { error: result.error };
@@ -477,7 +525,11 @@ export default function App() {
               onBreachDefend={() => run(breachCombatDefend)}
               onBreachEndTurn={() => run(breachCombatEndTurn)}
               onBreachTrinket={() => run(breachCombatTrinket)}
-              onBreachContinue={() => run(breachCombatContinue)}
+              onBreachContinue={() => {
+                const result = sealResult(breachCombatContinue(player));
+                if (!commit(result)) return;
+                if (result.breachReward) setBreachReward(result.breachReward);
+              }}
               onBreachFlee={() => run(breachFlee)}
               onRefreshRadar={refreshRadar}
             />
@@ -537,6 +589,7 @@ export default function App() {
       {modal === 'energy' && <EnergyModal player={player} commit={commit} onClose={() => setModal(null)} />}
 
       {bossReward && <BossRewardCard reward={bossReward} onClose={() => setBossReward(null)} />}
+      {breachReward && <BreachClearCard reward={breachReward} onClose={() => setBreachReward(null)} />}
 
       {unlockId && (
         <UnlockOverlay

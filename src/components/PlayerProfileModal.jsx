@@ -242,7 +242,9 @@ export default function PlayerProfileModal({ userId, fallbackName, onClose }) {
           {!loading && (
             <>
               <div className="mb-2 font-display text-[10px] tracking-widest text-zinc-500">АКТИВНОСТЬ · 7 ДНЕЙ</div>
-              {activity.length === 0 ? (
+              {profile?.hideActivity ? (
+                <div className="py-6 text-center text-xs text-zinc-600">Игрок скрыл активность.</div>
+              ) : activity.length === 0 ? (
                 <div className="py-6 text-center text-xs text-zinc-600">За неделю записей нет.</div>
               ) : (
                 byDay.map(([day, items]) => (

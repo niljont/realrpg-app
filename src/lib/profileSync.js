@@ -14,9 +14,9 @@ export { pointsForStatLevel } from './game';
 
 /** Колонки профиля без тяжёлого save_data (лидерборд / лёгкий refresh). */
 export const PROFILE_PUBLIC_COLS =
-  'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,breach_wins,active_title,gender,updated_at';
+  'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,breach_wins,active_title,gender,hide_activity,updated_at';
 
-const OPTIONAL_PROFILE_COLS = ['save_data', 'breach_wins', 'active_title', 'gender', 'weekly_activity'];
+const OPTIONAL_PROFILE_COLS = ['save_data', 'breach_wins', 'active_title', 'gender', 'weekly_activity', 'hide_activity'];
 
 export function totalRepsFromPlayer(p) {
   const totals = p?.totals ?? {};
@@ -64,7 +64,8 @@ export function playerToProfileRow(player, userId) {
     breach_wins: int(player.world?.breachWins),
     active_title: player.activeTitle || 'wanderer',
     gender: player.gender === 'female' ? 'female' : 'male',
-    weekly_activity: buildWeeklyActivity(player),
+    hide_activity: Boolean(player.hideActivity),
+    weekly_activity: player.hideActivity ? [] : buildWeeklyActivity(player),
     save_data: playerToSaveData(player),
     updated_at: new Date().toISOString(),
   };
@@ -97,9 +98,14 @@ export async function fetchPlayerPublicProfile(userId) {
     return { username: '', activity: [], stats: null, error: 'Нет игрока' };
   }
 
-  const cols =
-    'username,level,strength,endurance,agility,intelligence,willpower,active_title,gender,weekly_activity,save_data';
-  const { data, error } = await supabase.from('profiles').select(cols).eq('id', userId).maybeSingle();
+  let cols =
+    'username,level,strength,endurance,agility,intelligence,willpower,active_title,gender,hide_activity,weekly_activity,save_data';
+  let { data, error } = await supabase.from('profiles').select(cols).eq('id', userId).maybeSingle();
+  if (error && /hide_activity/i.test(error.message || '')) {
+    cols =
+      'username,level,strength,endurance,agility,intelligence,willpower,active_title,gender,weekly_activity,save_data';
+    ({ data, error } = await supabase.from('profiles').select(cols).eq('id', userId).maybeSingle());
+  }
 
   if (!error && data) {
     return {
@@ -107,6 +113,7 @@ export async function fetchPlayerPublicProfile(userId) {
       level: data.level ?? 1,
       activeTitle: data.active_title || 'wanderer',
       gender: data.gender === 'female' ? 'female' : 'male',
+      hideActivity: Boolean(data.hide_activity),
       stats: {
         STR: data.strength ?? 1,
         END: data.endurance ?? 1,
@@ -114,7 +121,7 @@ export async function fetchPlayerPublicProfile(userId) {
         INT: data.intelligence ?? 1,
         WIL: data.willpower ?? 1,
       },
-      activity: Array.isArray(data.weekly_activity) ? data.weekly_activity : [],
+      activity: data.hide_activity || !Array.isArray(data.weekly_activity) ? [] : data.weekly_activity,
       loadout: loadoutFromSave(data.save_data, data.username || 'Игрок'),
       error: null,
     };
@@ -279,6 +286,12 @@ async function upsertRow(row) {
 export async function upsertProfile(player, userId) {
   const row = playerToProfileRow(player, userId);
   return upsertRow(row);
+}
+
+/** Обновляет updated_at своего профиля, пока приложение открыто. */
+export function touchPresence(userId) {
+  if (!userId) return Promise.resolve();
+  return supabase.from('profiles').update({ updated_at: new Date().toISOString() }).eq('id', userId);
 }
 
 export async function fetchLeaderboard(limit = 100) {

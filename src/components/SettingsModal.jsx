@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LogOut, Mars, Pencil, RefreshCw, RotateCcw, ScrollText, Venus } from 'lucide-react';
+import { EyeOff, LogOut, Mars, Pencil, RefreshCw, RotateCcw, ScrollText, UserRound, Venus } from 'lucide-react';
 import Modal from './Modal';
 import { CHANGELOG } from '../lib/changelog';
 import {
@@ -39,8 +39,8 @@ const GENDER_OPTIONS = [
   { id: 'female', label: 'Женский', Icon: Venus, color: '#e879f9' },
 ];
 
-export default function SettingsModal({ player, onClose, onSignOut, onResetAccount, onRename, onChangeGender }) {
-  const [view, setView] = useState('menu'); // menu | rename | gender | changelog | logout | reset1 | reset2
+export default function SettingsModal({ player, onClose, onSignOut, onResetAccount, onRename, onChangeGender, onHideActivity }) {
+  const [view, setView] = useState('menu'); // menu | account | rename | gender | changelog | logout | reset1 | reset2
   const [busy, setBusy] = useState(false);
   const [nameDraft, setNameDraft] = useState(player?.name ?? '');
   const [renameError, setRenameError] = useState('');
@@ -48,7 +48,7 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (view !== 'menu' && view !== 'rename' && view !== 'gender') return undefined;
+    if (view !== 'account' && view !== 'rename' && view !== 'gender') return undefined;
     const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, [view]);
@@ -100,7 +100,7 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
             disabled={busy}
             onClick={() => {
               setRenameError('');
-              setView('menu');
+              setView('account');
             }}
             className="flex-1 rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
           >
@@ -179,7 +179,7 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
           disabled={busy}
           onClick={() => {
             setGenderError('');
-            setView('menu');
+            setView('account');
           }}
           className="w-full rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
         >
@@ -228,7 +228,7 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
           <button
             type="button"
             disabled={busy}
-            onClick={() => setView('menu')}
+            onClick={() => setView('account')}
             className="flex-1 rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
           >
             Отмена
@@ -256,7 +256,7 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setView('menu')}
+            onClick={() => setView('account')}
             className="flex-1 rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
           >
             Отмена
@@ -284,7 +284,7 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
           <button
             type="button"
             disabled={busy}
-            onClick={() => setView('menu')}
+            onClick={() => setView('account')}
             className="flex-1 rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
           >
             Отмена
@@ -307,18 +307,42 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
     );
   }
 
-  return (
-    <Modal title="Настройки" onClose={onClose}>
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => {
-            setNameDraft(player?.name ?? '');
-            setRenameError('');
-            setView('rename');
-          }}
-          className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
-        >
+  if (view === 'account') {
+    const hidden = Boolean(player?.hideActivity);
+    return (
+      <Modal title="Аккаунт" onClose={onClose}>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() =>
+              run(async () => {
+                await onHideActivity?.(!hidden);
+              })
+            }
+            className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
+          >
+            <EyeOff size={18} className={`shrink-0 ${hidden ? 'text-amber-300' : 'text-zinc-500'}`} />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-zinc-100">Скрывать активность</div>
+              <div className="text-[11px] text-zinc-500">Другие не видят онлайн и записи тренировок</div>
+            </div>
+            <span
+              className={`relative h-6 w-11 shrink-0 rounded-full transition ${hidden ? 'bg-amber-400' : 'bg-zinc-700'}`}
+              aria-hidden
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${hidden ? 'left-5' : 'left-0.5'}`} />
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setNameDraft(player?.name ?? '');
+              setRenameError('');
+              setView('rename');
+            }}
+            className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
+          >
           <Pencil size={18} className="shrink-0 text-neon" />
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-zinc-100">Сменить имя</div>
@@ -351,18 +375,6 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
 
         <button
           type="button"
-          onClick={() => setView('changelog')}
-          className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
-        >
-          <ScrollText size={18} className="shrink-0 text-neon" />
-          <div>
-            <div className="text-sm font-bold text-zinc-100">Список изменений</div>
-            <div className="text-[11px] text-zinc-500">Что появилось в последних обновлениях</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setView('logout')}
           className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
         >
@@ -375,6 +387,54 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
 
         <button
           type="button"
+          onClick={() => setView('reset1')}
+          className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3.5 text-left transition active:scale-[0.99]"
+        >
+          <RotateCcw size={18} className="shrink-0 text-red-400" />
+          <div>
+            <div className="text-sm font-bold text-red-300">Обнулить аккаунт</div>
+            <div className="text-[11px] text-zinc-500">Два предупреждения · прогресс будет стёрт</div>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('menu')}
+          className="w-full rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300"
+        >
+          Назад
+        </button>
+      </div>
+    </Modal>
+  );
+  }
+
+  return (
+    <Modal title="Настройки" onClose={onClose}>
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setView('account')}
+          className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
+        >
+          <UserRound size={18} className="shrink-0 text-neon" />
+          <div>
+            <div className="text-sm font-bold text-zinc-100">Аккаунт</div>
+            <div className="text-[11px] text-zinc-500">Имя, пол, активность, выход</div>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('changelog')}
+          className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
+        >
+          <ScrollText size={18} className="shrink-0 text-neon" />
+          <div>
+            <div className="text-sm font-bold text-zinc-100">Список изменений</div>
+            <div className="text-[11px] text-zinc-500">Что появилось в последних обновлениях</div>
+          </div>
+        </button>
+        <button
+          type="button"
           disabled={busy}
           onClick={() => run(clearAppCacheAndReload)}
           className="flex w-full items-center gap-3 rounded-xl border border-sky-500/30 bg-sky-500/5 px-4 py-3.5 text-left transition active:scale-[0.99]"
@@ -383,18 +443,6 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
           <div>
             <div className="text-sm font-bold text-sky-300">Обновить приложение</div>
             <div className="text-[11px] text-zinc-500">Сброс кэша PWA · если рейтинг «залип»</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setView('reset1')}
-          className="flex w-full items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3.5 text-left transition active:scale-[0.99]"
-        >
-          <RotateCcw size={18} className="shrink-0 text-red-400" />
-          <div>
-            <div className="text-sm font-bold text-red-300">Обнулить аккаунт</div>
-            <div className="text-[11px] text-zinc-500">Два предупреждения · прогресс будет стёрт</div>
           </div>
         </button>
       </div>

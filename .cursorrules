@@ -1,0 +1,43 @@
+# FitnessRPG
+
+PWA «Система»: фитнес как RPG. UI и тексты игрока — на русском. Новые записи changelog — сверху, в `src/lib/changelog.js`.
+
+## Стек
+
+- React 19 + Vite 8, ESM (`"type": "module"`). JavaScript, не TypeScript.
+- Стили: Tailwind CSS 4 (`@tailwindcss/vite`). Тёмная тема, неон Системы (`text-neon`, `system-panel`, `bg-void`).
+- Иконки: lucide-react. Графики: recharts.
+- Состояние: один объект `player` в `App.jsx` (`useState`). Нет Redux/Zustand.
+- Сейв: `localStorage` + Supabase (`profiles.save_data`). Auth: `src/context/AuthContext.jsx`.
+- Общий босс дня: RPC `strike_daily_boss` (`supabase/daily_boss.sql`). Клиент не меняет HP босса сам.
+
+## Папки
+
+- `src/App.jsx` — вкладки, `commit`/`run`, тосты, синк.
+- `src/components/` — экраны (`*Screen.jsx`), HUD, модалки. Логики игры в экранах нет.
+- `src/lib/` — правила игры: `game.js` (статы, XP, игрок), `equipment.js`, `breaches.js`, `world.js`, `crafting.js`, `loot.js`, `daily.js`, `profileSync.js`, `chat.js`.
+- `src/context/` — сессия Supabase.
+- `supabase/` — SQL для редактора Supabase. Новый SQL не считается применённым, пока его не выполнили вручную.
+- Отдельных `stores/` и `types/` нет.
+
+## Сущности
+
+- Статы: **STR END AGI INT WIL**. Очки → уровень через `statLevel`. Уровень персонажа — `levelFromXp(xp)`.
+- **AP** — энергия. Тренировка AP не тратит. Сбор, крафт и Брешь тратят. Реген +1 / 30 мин. Утром AP до max.
+- **HP** = END×15 + экипировка. Реген **5% max / 15 мин**, минимум 1 (`hpRegenPerTick`). В активной Бреши внешний реген не идёт. Смерть в Бреши оставляет 1 HP.
+- **Палиум** — валюта, тысячные (`formatPalium`, `addPalium`, округление `p3`). Не показывать сырой float.
+- **Шаги**: банк шагов, 1000 шагов = 5 END, дневного потолка нет. Уменьшение шагов END не отнимает.
+- **Инвентарь**: счётчики `player.inventory[id]`. Сгенерированные вещи — определения в `player.generatedGear[id]`, не в общем каталоге. Слоты сумки ограничены (`bagFreeSlots`).
+- **Экипировка**: слоты `EQUIP_SLOTS`. Оружие 1h/2h/offhand; двуручное занимает левую руку. Редкость WoW: common / uncommon / rare / epic. Надетое сравнивать через `gearPower` / `isGearUpgrade`.
+- **Брешь**: бой в `breaches.js`. Победа и побег сохраняют лут. Смерть забирает половину (нечётный стак — `ceil(n/2)`, один предмет остаётся, Палиум до тысячных).
+- **Профессии**: smith, leather, tailor, alchemy, jewel. Крафт тратит AP и качает `craftSkills`. Кулинария отдельно и не входит в счётчик «создано».
+- **Босс дня**: общий, HP 450 + 450 за каждого нового бойца, пока жив. Награда только если был урон и босс мёртв. Ник `adminsha` / `админша` в бою не участвует.
+- Контракт дня, серия явки и дело возвращения — `src/lib/daily.js`.
+
+## Код
+
+- Не менять контракты экранов и пропсы `App.jsx` без нужды. Мутации игрока возвращают `{ player, events }` или `{ error }`. Запись в UI только через `commit` / `run`.
+- Проект без TS. Новые функции и пропсы описывать JSDoc (`@param`, `@returns`). Не добавлять TypeScript и новые зависимости без запроса.
+- Стиль: тёмный фон, панели `system-panel`, акцент неона, редкости вещей своими цветами. Тексты игрока по-русски, коротко.
+- Не ломать `hydratePlayer`: сейв должен подниматься со старых сохранений.
+- Секреты и `.env` не коммитить. Git config не менять.

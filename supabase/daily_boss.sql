@@ -260,6 +260,16 @@ begin
         order by l.created_at desc
         limit 50
       ) t
+    ), '[]'::jsonb),
+    'board', coalesce((
+      select jsonb_agg(to_jsonb(t))
+      from (
+        select l.username, sum(l.damage)::int as damage
+        from public.daily_boss_log l
+        where l.day = p_day
+        group by l.username
+        order by sum(l.damage) desc
+      ) t
     ), '[]'::jsonb)
   );
 end;
