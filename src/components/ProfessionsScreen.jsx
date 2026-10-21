@@ -283,7 +283,7 @@ const CRAFT_ICONS = {
   jewel: Gem,
 };
 
-function CraftResultCard({ item, onClose }) {
+function CraftResultCard({ item, accent, onClose }) {
   const color = qualityColor(item);
   const quality = ITEM_QUALITY[item.quality]?.label;
   const dmgLine = formatWeaponDamageLine(item);
@@ -339,7 +339,7 @@ function CraftResultCard({ item, onClose }) {
           type="button"
           onClick={onClose}
           className="mt-4 w-full rounded-xl py-3 text-sm font-bold text-white"
-          style={{ background: color }}
+          style={{ background: accent || color }}
         >
           Забрать
         </button>
@@ -413,7 +413,7 @@ function CraftPanel({ player, profession, onCraft }) {
           </div>
         );
       })}
-      {drop && <CraftResultCard item={drop} onClose={() => setDrop(null)} />}
+      {drop && <CraftResultCard item={drop} accent={profession.color} onClose={() => setDrop(null)} />}
     </div>
   );
 }

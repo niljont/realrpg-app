@@ -105,7 +105,7 @@ export function bossDamageFor(action, amount) {
   const n = Math.max(0, Number(amount) || 0);
   if (action === 'train' || action === 'quest') return Math.min(120, Math.max(8, Math.round(n)));
   if (action === 'steps') return Math.min(80, Math.round(n / 80));
-  if (action === 'gather') return 15;
+  if (action === 'gather') return 10;
   if (action === 'breach') return 70;
   if (action === 'craft') return 20;
   return 0;

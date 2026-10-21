@@ -36,8 +36,8 @@ export const EXERCISES = {
     { id: 'run', name: 'Бег', unit: 'км', rate: 50, step: 0.1 },
   ],
   AGI: [
-    { id: 'jumprope', name: 'Скакалка', unit: 'прыжк.', rate: 0.2 },
-    { id: 'burpees', name: 'Берпи', unit: 'повт.', rate: 2 },
+    { id: 'jumprope', name: 'Скакалка', unit: 'мин', rate: 5 },
+    { id: 'burpees', name: 'Берпи', unit: 'повт.', rate: 3 },
     { id: 'squats', name: 'Выпрыгивания', unit: 'повт.', rate: 1 },
     { id: 'stretching', name: 'Растяжка', unit: 'мин', rate: 5 },
   ],
@@ -344,7 +344,7 @@ export const TITLES = {
     names: { male: 'Прыгун', female: 'Прыгунья' },
     color: '#eab308',
     bonus: '+3% к XP Ловкости',
-    req: 'За 2 000 прыжков на скакалке',
+    req: 'За 30 минут скакалки',
     effect: { xp: { AGI: 0.03 } },
     achievement: 'rope2k',
     track: 'jumprope',
@@ -354,7 +354,7 @@ export const TITLES = {
     names: { male: 'Буря скакалки', female: 'Буря скакалки' },
     color: '#fde047',
     bonus: '+6% к XP Ловкости',
-    req: 'За 10 000 прыжков на скакалке',
+    req: 'За 120 минут скакалки',
     effect: { xp: { AGI: 0.06 } },
     achievement: 'rope10k',
     track: 'jumprope',
@@ -529,8 +529,8 @@ export const ACHIEVEMENTS = [
   { id: 'abs1500', name: 'Полторы тысячи на пресс', exId: 'abs', goal: 1500, title: 'core_ii', color: '#4ade80', track: 'abs', tier: 2 },
   { id: 'plank600', name: 'Десять минут планки', exId: 'plank', goal: 600, title: 'plank', color: '#16a34a', track: 'plank', tier: 1 },
   { id: 'plank2400', name: 'Сорок минут планки', exId: 'plank', goal: 2400, title: 'plank_ii', color: '#86efac', track: 'plank', tier: 2 },
-  { id: 'rope2k', name: 'Две тысячи прыжков', exId: 'jumprope', goal: 2000, title: 'jumper', color: '#eab308', track: 'jumprope', tier: 1 },
-  { id: 'rope10k', name: 'Десять тысяч прыжков', exId: 'jumprope', goal: 10000, title: 'jumper_ii', color: '#fde047', track: 'jumprope', tier: 2 },
+  { id: 'rope2k', name: 'Полчаса скакалки', exId: 'jumprope', goal: 30, title: 'jumper', color: '#eab308', track: 'jumprope', tier: 1 },
+  { id: 'rope10k', name: 'Два часа скакалки', exId: 'jumprope', goal: 120, title: 'jumper_ii', color: '#fde047', track: 'jumprope', tier: 2 },
   { id: 'burpees100', name: 'Сотня берпи', exId: 'burpees', goal: 100, title: 'burpee', color: '#f59e0b', track: 'burpees', tier: 1 },
   { id: 'burpees400', name: 'Четыреста берпи', exId: 'burpees', goal: 400, title: 'burpee_ii', color: '#fbbf24', track: 'burpees', tier: 2 },
   { id: 'jumps200', name: 'Двести выпрыгиваний', exId: 'squats', goal: 200, title: 'leaper', color: '#eab308', track: 'jumps', tier: 1 },
@@ -1139,12 +1139,16 @@ export function hydratePlayer(p) {
       INT: Math.floor(Number(p.statPoints?.INT) || 0),
       WIL: Math.floor(Number(p.statPoints?.WIL) || 0),
     },
+    jumpropeUnit: 'min',
     updatedAt: Number(p.updatedAt) || 0,
     nameChangedAt: Number(p.nameChangedAt) || 0,
     version: 7,
   };
   delete next.copper;
   delete next.dungeon;
+  if (p.jumpropeUnit !== 'min' && next.totals?.jumprope) {
+    next.totals = { ...next.totals, jumprope: 0 };
+  }
   if (!TITLES[next.activeTitle]) next.activeTitle = 'wanderer';
   return applyTimeSystems(checkAchievements(next)).player;
 }

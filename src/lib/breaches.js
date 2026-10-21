@@ -493,7 +493,7 @@ function collectKillLoot(session, enemy) {
   session.lootPalium = addPalium(session.lootPalium, gain);
   session.log.push(`[СИСТЕМА] ${enemy.name} нейтрализован. Начисление: +${formatPalium(gain)} Палиум.`);
 
-  const lootChance = enemy.boss ? 0.35 : session.rank === 'D' ? 0.12 : session.rank === 'E' ? 0.08 : 0.05;
+  const lootChance = enemy.boss ? 0.15 : session.rank === 'D' ? 0.05 : session.rank === 'E' ? 0.03 : 0.02;
   if (Math.random() < lootChance) {
     session.lootItems.cheatmeal_scroll = (session.lootItems.cheatmeal_scroll ?? 0) + 1;
     session.log.push('[СИСТЕМА] Обнаружен артефакт: Свиток Читмила.');
