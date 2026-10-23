@@ -1004,6 +1004,7 @@ export function createPlayer(name, gender) {
     customRecipes: [],
     customQuests: [],
     activeTitle: 'wanderer',
+    pvpRating: 1000,
     achievements: [],
     totals: {},
     buffs: {},
@@ -1118,6 +1119,7 @@ export function hydratePlayer(p) {
     returnOffer: p.returnOffer?.date ? p.returnOffer : null,
     bossClaimDate: p.bossClaimDate ?? '',
     hideActivity: Boolean(p.hideActivity),
+    pvpRating: Math.max(100, Math.floor(Number(p.pvpRating) || 1000)),
     radar: p.radar ?? null,
     breach: p.breach?.active ? p.breach : null,
     world: { gathered: 0, cooked: 0, breaches: 0, breachWins: 0, ...(p.world ?? {}) },
@@ -1328,6 +1330,32 @@ function withQuestCompletion(p, questId, today) {
           }
         : q,
     ),
+  };
+}
+
+/**
+ * Итог дуэли. Победа +20 рейтинга, поражение −15, ничья без изменений.
+ * @param {object} p
+ * @param {{ outcome: 'win' | 'loss' | 'draw', reps?: number }} result
+ */
+export function applyPvpResult(p, { outcome, reps = 0 } = {}) {
+  const count = Math.max(0, Math.floor(Number(reps) || 0));
+  const trained = count > 0 ? applyTraining(p, 'STR', 'pushups', count) : null;
+  const base = trained && !trained.error ? trained.player : p;
+  const events = trained && !trained.error ? [...(trained.events ?? [])] : [];
+  const current = Math.max(100, Math.floor(Number(base?.pvpRating) || 1000));
+  const delta = outcome === 'win' ? 20 : outcome === 'loss' ? -15 : 0;
+  const rating = Math.max(100, current + delta);
+  const text = outcome === 'win'
+    ? `Дуэль выиграна · рейтинг ${rating}`
+    : outcome === 'loss'
+      ? `Дуэль проиграна · рейтинг ${rating}`
+      : `Дуэль: ничья · рейтинг ${rating}`;
+  events.push({ type: outcome === 'loss' ? 'error' : 'title', text });
+  return {
+    player: { ...base, pvpRating: rating },
+    events,
+    ...(trained && !trained.error && trained.daily ? { daily: trained.daily } : {}),
   };
 }
 

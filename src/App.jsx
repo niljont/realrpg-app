@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dumbbell, Hammer, Map, Medal, MessageCircle, Skull, UserRound } from 'lucide-react';
+import { Dumbbell, Hammer, Map, Medal, MessageCircle, Skull, Swords, UserRound } from 'lucide-react';
 import AuthScreen from './components/AuthScreen';
 import Hud from './components/Hud';
 import EnergyModal from './components/EnergyModal';
@@ -10,6 +10,7 @@ import ProfessionsScreen from './components/ProfessionsScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import ChatScreen from './components/ChatScreen';
 import BossScreen, { BossRewardCard } from './components/BossScreen';
+import PvpScreen from './components/PvpScreen';
 import UnlockOverlay from './components/UnlockOverlay';
 import { useAuth } from './context/AuthContext';
 import {
@@ -26,6 +27,7 @@ import {
   setHideActivity,
   renamePlayer,
   savePlayer,
+  applyPvpResult,
   sealResult,
   stampPlayer,
   dayKey,
@@ -114,6 +116,7 @@ const TABS = [
   { id: 'world', label: 'Мир', Icon: Map },
   { id: 'professions', label: 'Профы', Icon: Hammer },
   { id: 'boss', label: 'Босс', Icon: Skull },
+  { id: 'pvp', label: 'PvP', Icon: Swords },
   { id: 'chat', label: 'Чат', Icon: MessageCircle },
   { id: 'rank', label: 'Рейтинг', Icon: Medal },
 ];
@@ -558,6 +561,7 @@ export default function App() {
               }}
             />
           )}
+          {tab === 'pvp' && <PvpScreen player={player} onResult={(payload) => commit(applyPvpResult(player, payload))} />}
           {tab === 'chat' && <ChatScreen player={player} onSeen={markChatSeen} />}
           {tab === 'rank' && <LeaderboardScreen player={player} />}
         </main>
