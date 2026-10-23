@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Ban, Check, Dumbbell, Plus, Trash2, X } from 'lucide-react';
+import { Ban, Camera, Check, Dumbbell, Plus, Trash2, X } from 'lucide-react';
+import { usePoseCamera } from './PushupCamera';
 import {
   CUSTOM_QUEST_POINTS,
   EXERCISES,
@@ -25,7 +26,7 @@ function pointsPreview(raw) {
   return { awarded, label: ` · +${awarded} pt` };
 }
 
-function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff, showCheck, onConfirm }) {
+function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff, showCheck, onConfirm, onCamera }) {
   const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === diff) : null;
   const rate = load?.rate ?? ex.rate;
   const raw = exercisePoints(ex, Number(amount) || 0, rate) * mult;
@@ -60,6 +61,17 @@ function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff, showChec
           className="w-20 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-right font-bold tabular-nums outline-none"
           style={{ color }}
         />
+        {onCamera && (
+          <button
+            type="button"
+            onClick={onCamera}
+            className="flex min-w-12 items-center justify-center rounded-lg border px-3 py-2 text-xs font-bold transition active:scale-95"
+            style={{ borderColor: color, color }}
+            aria-label="Считать камерой"
+          >
+            <Camera size={14} />
+          </button>
+        )}
         {showCheck && (
           <button
             type="button"
@@ -295,10 +307,53 @@ function filledExercise(stat, ex, draft, mult) {
   };
 }
 
+const CAMERA_EXERCISES = {
+  pushups: { stat: 'STR', mode: 'pushups', title: 'ОТЖИМАНИЯ', unit: 'повт.', hint: 'Боком к телефону. Согнул руки и выпрямил — одно отжимание.' },
+  pullups: { stat: 'STR', mode: 'pullups', title: 'ПОДТЯГИВАНИЯ', unit: 'повт.', hint: 'В кадр корпус и руки. Повис на прямых руках и подтянись.' },
+  legsquats: { stat: 'STR', mode: 'squats', title: 'ПРИСЕДАНИЯ', unit: 'повт.', hint: 'Боком. Опустился и снова встал — одно приседание.' },
+  abs: { stat: 'END', mode: 'abs', title: 'ПРЕСС', unit: 'повт.', hint: 'Боком, колени согнуты. Лёг и сел — один повтор.' },
+  plank: { stat: 'END', mode: 'plank', title: 'ПЛАНКА', unit: 'сек', hint: 'Боком, тело прямое. Секунды идут, пока держишь упор.' },
+};
+
+function ExerciseCameraCard({ exercise, color, onClose, onSave }) {
+  const [value, setValue] = useState(0);
+  const { videoRef, error, ready } = usePoseCamera(true, true, exercise.mode, setValue);
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/75 p-4 backdrop-blur-sm sm:items-center">
+      <div className="system-panel modal-in w-full max-w-sm space-y-3 p-4">
+        <div className="text-center font-display text-[11px] tracking-[0.28em]" style={{ color }}>КАМЕРА · {exercise.title}</div>
+        <div className="relative overflow-hidden rounded-xl border border-zinc-800 bg-black">
+          <video ref={videoRef} playsInline muted className="aspect-[4/3] w-full -scale-x-100 object-cover" />
+          {!ready && !error && (
+            <p className="absolute inset-0 flex items-center justify-center text-xs text-zinc-400">Камера запускается…</p>
+          )}
+          <div className="absolute left-3 top-3 font-display text-4xl tabular-nums text-white">{value}</div>
+        </div>
+        {error && <p className="text-[11px] text-red-300">{error}</p>}
+        <p className="text-center text-[11px] text-zinc-500">{exercise.hint}</p>
+        <button
+          type="button"
+          disabled={value <= 0}
+          onClick={() => onSave(value)}
+          className="w-full rounded-xl py-3 text-sm font-bold text-white disabled:opacity-30"
+          style={{ background: color }}
+        >
+          Записать {value} {exercise.unit}
+        </button>
+        <button type="button" onClick={onClose} className="w-full rounded-xl border border-zinc-700 py-3 text-sm font-bold text-zinc-300">
+          Отмена
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function TrainingScreen({ player, onTrain, onTrainMany, onAddQuest, onRemoveQuest, onBlockQuest }) {
   const [stat, setStat] = useState('STR');
   const [creating, setCreating] = useState(false);
   const [drafts, setDrafts] = useState({});
+  const [cameraId, setCameraId] = useState(null);
   const today = dayKey();
   const todayLog = (player.log ?? []).filter((e) => e.date === today);
   const todayTotals = Object.fromEntries(STATS.map((s) => [s, todayLog.filter((e) => e.stat === s).reduce((a, e) => a + e.points, 0)]));
@@ -415,6 +470,7 @@ export default function TrainingScreen({ player, onTrain, onTrainMany, onAddQues
                         })
                       }
                       onConfirm={() => row && submit([row])}
+                      onCamera={CAMERA_EXERCISES[ex.id] ? () => setCameraId(ex.id) : undefined}
                     />
                   );
                 })}
@@ -513,6 +569,18 @@ export default function TrainingScreen({ player, onTrain, onTrainMany, onAddQues
             })}
           </ul>
         </section>
+      )}
+      {CAMERA_EXERCISES[cameraId] && (
+        <ExerciseCameraCard
+          exercise={CAMERA_EXERCISES[cameraId]}
+          color={STAT_META[CAMERA_EXERCISES[cameraId].stat].color}
+          onClose={() => setCameraId(null)}
+          onSave={(value) => {
+            const exercise = CAMERA_EXERCISES[cameraId];
+            onTrain?.(exercise.stat, cameraId, value);
+            setCameraId(null);
+          }}
+        />
       )}
     </div>
   );
