@@ -53,6 +53,39 @@ export const EXERCISES = {
   ],
 };
 
+/** Упражнения дуэли. Рейтинг у каждого свой. */
+export const PVP_EXERCISES = [
+  { id: 'pushups', stat: 'STR', name: 'Отжимания', mode: 'pushups' },
+  { id: 'pullups', stat: 'STR', name: 'Подтягивания', mode: 'pullups' },
+  { id: 'legsquats', stat: 'STR', name: 'Приседания', mode: 'squats' },
+  { id: 'abs', stat: 'END', name: 'Пресс', mode: 'abs' },
+];
+
+/** @param {string} [id] */
+export function pvpExercise(id) {
+  return PVP_EXERCISES.find((ex) => ex.id === id) ?? PVP_EXERCISES[0];
+}
+
+/** @param {object} p */
+export function pvpRatingsOf(p) {
+  const src = p?.pvpRatings && typeof p.pvpRatings === 'object' ? p.pvpRatings : {};
+  const legacy = Math.max(100, Math.floor(Number(p?.pvpRating) || 1000));
+  const out = {};
+  for (const ex of PVP_EXERCISES) {
+    const raw = src[ex.id] != null ? src[ex.id] : ex.id === 'pushups' ? legacy : 1000;
+    out[ex.id] = Math.max(100, Math.floor(Number(raw) || 1000));
+  }
+  return out;
+}
+
+/** @param {object} p */
+export function pvpWinsOf(p) {
+  const src = p?.pvpWins && typeof p.pvpWins === 'object' ? p.pvpWins : {};
+  const out = {};
+  for (const ex of PVP_EXERCISES) out[ex.id] = Math.max(0, Math.floor(Number(src[ex.id]) || 0));
+  return out;
+}
+
 export const BASE_AP = 10;
 export const STR_PER_AP = 20;
 export const TRAINING_AP_COST = 0; // Прокачка не тратит энергию
@@ -545,6 +578,14 @@ export const ACHIEVEMENTS = [
   { id: 'draw600', name: 'Десять часов рисования', exId: 'drawing', goal: 600, title: 'artist_ii', color: '#a5b4fc', track: 'drawing', tier: 2 },
   { id: 'med60', name: 'Час медитации', exId: 'meditation', goal: 60, title: 'monk', color: '#a855f7', track: 'meditation', tier: 1 },
   { id: 'med300', name: 'Пять часов медитации', exId: 'meditation', goal: 300, title: 'monk_ii', color: '#d8b4fe', track: 'meditation', tier: 2 },
+  { id: 'pvpPush1', name: 'Дуэлянт отжиманий', desc: 'Победа в дуэли на отжиманиях', progress: (p) => p.pvpWins?.pushups ?? 0, goal: 1, color: '#22d3ee', tier: 1 },
+  { id: 'pvpPush10', name: 'Десять дуэлей на отжиманиях', desc: 'Победы в дуэли на отжиманиях', progress: (p) => p.pvpWins?.pushups ?? 0, goal: 10, color: '#67e8f9', tier: 2 },
+  { id: 'pvpPull1', name: 'Дуэлянт турника', desc: 'Победа в дуэли на подтягиваниях', progress: (p) => p.pvpWins?.pullups ?? 0, goal: 1, color: '#f97316', tier: 1 },
+  { id: 'pvpPull10', name: 'Десять дуэлей на турнике', desc: 'Победы в дуэли на подтягиваниях', progress: (p) => p.pvpWins?.pullups ?? 0, goal: 10, color: '#fdba74', tier: 2 },
+  { id: 'pvpSquat1', name: 'Дуэлянт приседа', desc: 'Победа в дуэли на приседаниях', progress: (p) => p.pvpWins?.legsquats ?? 0, goal: 1, color: '#ef4444', tier: 1 },
+  { id: 'pvpSquat10', name: 'Десять дуэлей на приседаниях', desc: 'Победы в дуэли на приседаниях', progress: (p) => p.pvpWins?.legsquats ?? 0, goal: 10, color: '#f87171', tier: 2 },
+  { id: 'pvpAbs1', name: 'Дуэлянт пресса', desc: 'Победа в дуэли на пресс', progress: (p) => p.pvpWins?.abs ?? 0, goal: 1, color: '#22c55e', tier: 1 },
+  { id: 'pvpAbs10', name: 'Десять дуэлей на пресс', desc: 'Победы в дуэли на пресс', progress: (p) => p.pvpWins?.abs ?? 0, goal: 10, color: '#4ade80', tier: 2 },
   { id: 'firstQuest', name: 'Первый шаг', desc: 'Выполнить первую тренировку', progress: (p) => p.log.length, goal: 1, color: '#22d3ee', tier: 1 },
   { id: 'level10', name: 'Пробуждённый', desc: 'Достичь 10 уровня', progress: (p) => levelFromXp(p.xp).level, goal: 10, color: '#a855f7', tier: 1 },
   { id: 'maxAp15', name: 'Бездонный резерв', desc: 'Поднять максимум энергии до 15 AP', progress: (p) => p.maxAp, goal: 15, color: '#3b82f6', tier: 1 },
@@ -1005,6 +1046,10 @@ export function createPlayer(name, gender) {
     customQuests: [],
     activeTitle: 'wanderer',
     pvpRating: 1000,
+    pvpRatings: { pushups: 1000, pullups: 1000, legsquats: 1000, abs: 1000 },
+    pvpWins: { pushups: 0, pullups: 0, legsquats: 0, abs: 0 },
+    notifyDaily: false,
+    squadClaim: '',
     achievements: [],
     totals: {},
     buffs: {},
@@ -1120,6 +1165,10 @@ export function hydratePlayer(p) {
     bossClaimDate: p.bossClaimDate ?? '',
     hideActivity: Boolean(p.hideActivity),
     pvpRating: Math.max(100, Math.floor(Number(p.pvpRating) || 1000)),
+    pvpRatings: pvpRatingsOf(p),
+    pvpWins: pvpWinsOf(p),
+    notifyDaily: Boolean(p.notifyDaily),
+    squadClaim: typeof p.squadClaim === 'string' ? p.squadClaim : '',
     radar: p.radar ?? null,
     breach: p.breach?.active ? p.breach : null,
     world: { gathered: 0, cooked: 0, breaches: 0, breachWins: 0, ...(p.world ?? {}) },
@@ -1338,24 +1387,38 @@ function withQuestCompletion(p, questId, today) {
  * @param {object} p
  * @param {{ outcome: 'win' | 'loss' | 'draw', reps?: number }} result
  */
-export function applyPvpResult(p, { outcome, reps = 0 } = {}) {
+export function applyPvpResult(p, { outcome, reps = 0, exercise = 'pushups' } = {}) {
+  const ex = pvpExercise(exercise);
   const count = Math.max(0, Math.floor(Number(reps) || 0));
-  const trained = count > 0 ? applyTraining(p, 'STR', 'pushups', count) : null;
+  const trained = count > 0 ? applyTraining(p, ex.stat, ex.id, count) : null;
   const base = trained && !trained.error ? trained.player : p;
   const events = trained && !trained.error ? [...(trained.events ?? [])] : [];
-  const current = Math.max(100, Math.floor(Number(base?.pvpRating) || 1000));
+  const ratings = pvpRatingsOf(base);
   const delta = outcome === 'win' ? 20 : outcome === 'loss' ? -15 : 0;
-  const rating = Math.max(100, current + delta);
+  const rating = Math.max(100, ratings[ex.id] + delta);
+  ratings[ex.id] = rating;
+  const wins = pvpWinsOf(base);
+  if (outcome === 'win') wins[ex.id] += 1;
   const text = outcome === 'win'
-    ? `Дуэль выиграна · рейтинг ${rating}`
+    ? `Дуэль (${ex.name}) выиграна · рейтинг ${rating}`
     : outcome === 'loss'
-      ? `Дуэль проиграна · рейтинг ${rating}`
-      : `Дуэль: ничья · рейтинг ${rating}`;
+      ? `Дуэль (${ex.name}) проиграна · рейтинг ${rating}`
+      : `Дуэль (${ex.name}): ничья · рейтинг ${rating}`;
   events.push({ type: outcome === 'loss' ? 'error' : 'title', text });
+  const player = checkAchievements({ ...base, pvpRating: ratings.pushups, pvpRatings: ratings, pvpWins: wins }, events);
   return {
-    player: { ...base, pvpRating: rating },
+    player,
     events,
     ...(trained && !trained.error && trained.daily ? { daily: trained.daily } : {}),
+  };
+}
+
+/** Разрешить одно напоминание в день. */
+export function setNotifyDaily(p, on) {
+  const next = Boolean(on);
+  return {
+    player: { ...p, notifyDaily: next },
+    events: [{ type: 'system', text: next ? 'Напоминание Системы включено' : 'Напоминание Системы выключено' }],
   };
 }
 

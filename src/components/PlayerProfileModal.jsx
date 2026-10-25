@@ -141,7 +141,7 @@ function PublicLoadout({ loadout }) {
   );
 }
 
-export default function PlayerProfileModal({ userId, fallbackName, onClose }) {
+export default function PlayerProfileModal({ userId, fallbackName, onClose, onChallenge }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [profile, setProfile] = useState(null);
@@ -216,6 +216,18 @@ export default function PlayerProfileModal({ userId, fallbackName, onClose }) {
             <X size={16} />
           </button>
         </div>
+        {onChallenge && (
+          <button
+            type="button"
+            onClick={() => {
+              onChallenge();
+              onClose?.();
+            }}
+            className="mx-4 mb-2 rounded-xl border border-neon/40 py-2 text-sm font-bold text-neon"
+          >
+            Вызвать на дуэль
+          </button>
+        )}
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {loading && <div className="py-8 text-center text-xs text-zinc-600">Загрузка…</div>}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Medal, RefreshCw, Trophy } from 'lucide-react';
+import { Medal, RefreshCw, Swords, Trophy } from 'lucide-react';
 import { fetchLeaderboard, powerScore, sortLeaderboard } from '../lib/profileSync';
-import { STAT_META, TITLES, formatPalium, stampPlayer, titleName } from '../lib/game';
+import { PVP_EXERCISES, STAT_META, TITLES, formatPalium, stampPlayer, titleName } from '../lib/game';
 import { useAuth } from '../context/AuthContext';
 import PlayerProfileModal from './PlayerProfileModal';
 
@@ -32,6 +32,7 @@ const TABS = [
   { id: 'WIL', label: 'WIL' },
   { id: 'breaches', label: 'Бреши' },
   { id: 'rich', label: 'Богачи' },
+  { id: 'duel', label: 'Дуэли' },
 ];
 
 function scoreLabel(mode, row) {
@@ -52,6 +53,11 @@ function scoreLabel(mode, row) {
       return `${row.breach_wins ?? 0} побед`;
     case 'rich':
       return `${formatPalium((row.gold ?? 0) / 1000)} P`;
+    case 'pushups':
+    case 'pullups':
+    case 'legsquats':
+    case 'abs':
+      return `${row[`pvp_${mode}`] ?? 1000}`;
     case 'overall':
     default:
       return `Σ ${powerScore(row)} · Lv ${row.level ?? 1}`;
@@ -85,10 +91,11 @@ function formatUpdatedAt(ts) {
   }
 }
 
-export default function LeaderboardScreen({ player }) {
+export default function LeaderboardScreen({ player, onChallenge }) {
   const { user, syncPlayerToCloud } = useAuth();
   const [rows, setRows] = useState([]);
   const [tab, setTab] = useState('overall');
+  const [duelEx, setDuelEx] = useState('pushups');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
@@ -148,7 +155,8 @@ export default function LeaderboardScreen({ player }) {
     return () => clearInterval(id);
   }, [load]);
 
-  const sorted = useMemo(() => sortLeaderboard(rows, tab).slice(0, 50), [rows, tab]);
+  const mode = tab === 'duel' ? duelEx : tab;
+  const sorted = useMemo(() => sortLeaderboard(rows, mode).slice(0, 50), [rows, mode]);
   const accent = STAT_META[tab]?.color || (tab === 'rich' ? '#38bdf8' : tab === 'breaches' ? '#a855f7' : '#eab308');
 
   return (
@@ -196,6 +204,24 @@ export default function LeaderboardScreen({ player }) {
             );
           })}
         </div>
+        {tab === 'duel' && (
+          <div className="grid grid-cols-2 gap-1">
+            {PVP_EXERCISES.map((ex) => {
+              const on = duelEx === ex.id;
+              return (
+                <button
+                  key={ex.id}
+                  type="button"
+                  onClick={() => setDuelEx(ex.id)}
+                  className="rounded-lg border px-2 py-1.5 text-[10px] font-bold"
+                  style={{ borderColor: on ? '#22d3ee' : '#3f3f46', color: on ? '#22d3ee' : '#a1a1aa' }}
+                >
+                  {ex.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <p className="text-[11px] text-zinc-500">
           Нажми на игрока — экипировка, радар статов и активность за 7 дней.
@@ -204,6 +230,7 @@ export default function LeaderboardScreen({ player }) {
           {['STR', 'END', 'AGI', 'INT', 'WIL'].includes(tab) && ` Топ по ${STAT_META[tab].label}.`}
           {tab === 'breaches' && ' Топ по закрытым Брешам.'}
           {tab === 'rich' && ' Топ по Палиуму.'}
+          {tab === 'duel' && ' Рейтинг дуэлей. Скрытая активность его не прячет.'}
         </p>
 
         {error && (
@@ -268,11 +295,35 @@ export default function LeaderboardScreen({ player }) {
                       {!online && !hidden && (
                         <div className="mt-0.5 text-[10px] text-zinc-500">{lastSeenLabel(row.updated_at, now)}</div>
                       )}
+                      {(mine ? player.attendance?.streak : !hidden && row.attendance_streak) > 0 && (
+                        <div className="mt-0.5 text-[10px] font-bold text-amber-300">
+                          серия {mine ? player.attendance?.streak : row.attendance_streak} дн.
+                        </div>
+                      )}
                     </div>
-                    <div className="shrink-0 text-right">
+                    <div className="flex shrink-0 flex-col items-end gap-1">
                       <div className="font-display text-sm" style={{ color: accent }}>
-                        {scoreLabel(tab, row)}
+                        {scoreLabel(mode, row)}
                       </div>
+                      {!mine && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChallenge?.({ id: row.id, name: row.username });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.stopPropagation();
+                              onChallenge?.({ id: row.id, name: row.username });
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md border border-neon/40 px-1.5 py-0.5 text-[10px] font-bold text-neon"
+                        >
+                          <Swords size={10} /> Вызвать
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -287,6 +338,11 @@ export default function LeaderboardScreen({ player }) {
           userId={viewPlayer.id}
           fallbackName={viewPlayer.name}
           onClose={() => setViewPlayer(null)}
+          onChallenge={
+            viewPlayer.id !== user?.id
+              ? () => onChallenge?.({ id: viewPlayer.id, name: viewPlayer.name })
+              : undefined
+          }
         />
       )}
     </div>

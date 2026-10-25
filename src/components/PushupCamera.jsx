@@ -44,6 +44,32 @@ function armPose(landmarks) {
   };
 }
 
+function poseHint(kind, landmarks) {
+  if (!landmarks) return 'Тебя не видно в кадре';
+  const arm = kind === 'pushups' || kind === 'pullups' ? armPose(landmarks) : null;
+  const leg = kind === 'squats' || kind === 'abs' || kind === 'plank' ? legPose(landmarks) : null;
+  if (kind === 'pushups') {
+    if (!arm) return 'Руки не в кадре';
+    if (!arm.plank) return 'Корпус не в упоре лёжа';
+  }
+  if (kind === 'pullups') {
+    if (!arm) return 'Руки не в кадре';
+    if (!arm.hanging && arm.angle > 140) return 'Повис на прямых руках';
+  }
+  if (kind === 'squats') {
+    if (!leg) return 'Ноги не в кадре';
+    if (!leg.upright) return 'Встань боком, корпус прямо';
+  }
+  if (kind === 'abs') {
+    if (!leg) return 'Ноги не в кадре';
+    if (leg.knee > 140) return 'Согни колени';
+  }
+  if (kind === 'plank') {
+    if (!leg || !leg.level || leg.knee <= 150) return 'Держи тело прямым';
+  }
+  return '';
+}
+
 function legPose(landmarks) {
   const leg = bestChain(landmarks, [[23, 25, 27], [24, 26, 28]]);
   const torso = bestChain(landmarks, [[11, 23], [12, 24]]);
@@ -66,6 +92,8 @@ export function usePoseCamera(active, counting, mode, onValue) {
   const videoRef = useRef(null);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+  const [hint, setHint] = useState('');
+  const hintRef = useRef('');
   const onValueRef = useRef(onValue);
   const countingRef = useRef(counting);
   const modeRef = useRef(mode);
@@ -131,6 +159,11 @@ export function usePoseCamera(active, counting, mode, onValue) {
           lastVideoTime = video.currentTime;
           const result = landmarker.detectForVideo(video, performance.now());
           const landmarks = result?.landmarks?.[0];
+          const nextHint = poseHint(modeRef.current, landmarks);
+          if (nextHint !== hintRef.current) {
+            hintRef.current = nextHint;
+            setHint(nextHint);
+          }
           if (!landmarks) return;
           const now = performance.now();
           const kind = modeRef.current;
@@ -226,7 +259,7 @@ export function usePoseCamera(active, counting, mode, onValue) {
     };
   }, [active]);
 
-  return { videoRef, error, ready };
+  return { videoRef, error, ready, hint };
 }
 
 /**

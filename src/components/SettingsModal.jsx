@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { EyeOff, LogOut, Mars, Pencil, RefreshCw, RotateCcw, ScrollText, UserRound, Venus } from 'lucide-react';
+import { Bell, EyeOff, LogOut, Mars, Pencil, RefreshCw, RotateCcw, ScrollText, UserRound, Venus } from 'lucide-react';
 import Modal from './Modal';
 import { CHANGELOG } from '../lib/changelog';
 import {
@@ -39,7 +39,7 @@ const GENDER_OPTIONS = [
   { id: 'female', label: 'Женский', Icon: Venus, color: '#e879f9' },
 ];
 
-export default function SettingsModal({ player, onClose, onSignOut, onResetAccount, onRename, onChangeGender, onHideActivity }) {
+export default function SettingsModal({ player, onClose, onSignOut, onResetAccount, onRename, onChangeGender, onHideActivity, onNotifyDaily }) {
   const [view, setView] = useState('menu'); // menu | account | rename | gender | changelog | logout | reset1 | reset2
   const [busy, setBusy] = useState(false);
   const [nameDraft, setNameDraft] = useState(player?.name ?? '');
@@ -309,6 +309,7 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
 
   if (view === 'account') {
     const hidden = Boolean(player?.hideActivity);
+    const notes = Boolean(player?.notifyDaily);
     return (
       <Modal title="Аккаунт" onClose={onClose}>
         <div className="space-y-2">
@@ -331,6 +332,25 @@ export default function SettingsModal({ player, onClose, onSignOut, onResetAccou
               aria-hidden
             >
               <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${hidden ? 'left-5' : 'left-0.5'}`} />
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              run(async () => {
+                await onNotifyDaily?.(!notes);
+              })
+            }
+            className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/70 px-4 py-3.5 text-left transition active:scale-[0.99]"
+          >
+            <Bell size={18} className={`shrink-0 ${notes ? 'text-neon' : 'text-zinc-500'}`} />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-zinc-100">Напоминание</div>
+              <div className="text-[11px] text-zinc-500">Раз в день: босс ещё жив или вечером серия сгорит</div>
+            </div>
+            <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${notes ? 'bg-neon' : 'bg-zinc-700'}`} aria-hidden>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${notes ? 'left-5' : 'left-0.5'}`} />
             </span>
           </button>
 

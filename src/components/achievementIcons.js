@@ -16,6 +16,7 @@ import {
   Skull,
   Soup,
   Sparkles,
+  Swords,
   Timer,
 } from 'lucide-react';
 
@@ -61,6 +62,14 @@ export const ACHIEVEMENT_ICONS = {
   draw600: Palette,
   med60: Sparkles,
   med300: Sparkles,
+  pvpPush1: Swords,
+  pvpPush10: Swords,
+  pvpPull1: Swords,
+  pvpPull10: Swords,
+  pvpSquat1: Swords,
+  pvpSquat10: Swords,
+  pvpAbs1: Swords,
+  pvpAbs10: Swords,
   firstQuest: Flag,
   level10: Sparkles,
   maxAp15: BatteryFull,

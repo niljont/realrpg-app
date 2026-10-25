@@ -1,5 +1,6 @@
 import {
   buildWeeklyActivity,
+  pvpRatingsOf,
   createPlayer,
   getStats,
   hydratePlayer,
@@ -14,9 +15,9 @@ export { pointsForStatLevel } from './game';
 
 /** Колонки профиля без тяжёлого save_data (лидерборд / лёгкий refresh). */
 export const PROFILE_PUBLIC_COLS =
-  'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,breach_wins,active_title,gender,hide_activity,updated_at';
+  'id,username,level,current_exp,exp_to_next,strength,endurance,agility,intelligence,willpower,current_ap,max_ap,gold,total_reps,breach_wins,active_title,gender,hide_activity,attendance_streak,pvp_pushups,pvp_pullups,pvp_legsquats,pvp_abs,updated_at';
 
-const OPTIONAL_PROFILE_COLS = ['save_data', 'breach_wins', 'active_title', 'gender', 'weekly_activity', 'hide_activity'];
+const OPTIONAL_PROFILE_COLS = ['save_data', 'breach_wins', 'active_title', 'gender', 'weekly_activity', 'hide_activity', 'attendance_streak', 'pvp_pushups', 'pvp_pullups', 'pvp_legsquats', 'pvp_abs'];
 
 export function totalRepsFromPlayer(p) {
   const totals = p?.totals ?? {};
@@ -65,6 +66,11 @@ export function playerToProfileRow(player, userId) {
     active_title: player.activeTitle || 'wanderer',
     gender: player.gender === 'female' ? 'female' : 'male',
     hide_activity: Boolean(player.hideActivity),
+    attendance_streak: player.hideActivity ? null : Math.max(0, Math.floor(Number(player.attendance?.streak) || 0)),
+    pvp_pushups: pvpRatingsOf(player).pushups,
+    pvp_pullups: pvpRatingsOf(player).pullups,
+    pvp_legsquats: pvpRatingsOf(player).legsquats,
+    pvp_abs: pvpRatingsOf(player).abs,
     weekly_activity: player.hideActivity ? [] : buildWeeklyActivity(player),
     save_data: playerToSaveData(player),
     updated_at: new Date().toISOString(),
@@ -352,6 +358,14 @@ export function sortLeaderboard(rows, mode) {
       return by((r) => r.breach_wins ?? 0);
     case 'rich':
       return by((r) => r.gold ?? 0);
+    case 'pushups':
+      return by((r) => r.pvp_pushups ?? 1000);
+    case 'pullups':
+      return by((r) => r.pvp_pullups ?? 1000);
+    case 'legsquats':
+      return by((r) => r.pvp_legsquats ?? 1000);
+    case 'abs':
+      return by((r) => r.pvp_abs ?? 1000);
     case 'overall':
     default:
       return by((r) => powerScore(r));

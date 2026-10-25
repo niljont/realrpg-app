@@ -317,7 +317,7 @@ const CAMERA_EXERCISES = {
 
 function ExerciseCameraCard({ exercise, color, onClose, onSave }) {
   const [value, setValue] = useState(0);
-  const { videoRef, error, ready } = usePoseCamera(true, true, exercise.mode, setValue);
+  const { videoRef, error, ready, hint } = usePoseCamera(true, true, exercise.mode, setValue);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/75 p-4 backdrop-blur-sm sm:items-center">
@@ -331,6 +331,7 @@ function ExerciseCameraCard({ exercise, color, onClose, onSave }) {
           <div className="absolute left-3 top-3 font-display text-4xl tabular-nums text-white">{value}</div>
         </div>
         {error && <p className="text-[11px] text-red-300">{error}</p>}
+        {hint && <p className="text-center text-[11px] font-bold text-amber-200">{hint}</p>}
         <p className="text-center text-[11px] text-zinc-500">{exercise.hint}</p>
         <button
           type="button"

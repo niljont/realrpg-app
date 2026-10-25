@@ -25,6 +25,10 @@ import {
   removeCustomQuest,
   changeGender,
   setHideActivity,
+  setNotifyDaily,
+  PVP_EXERCISES,
+  pvpExercise,
+  pvpRatingsOf,
   renamePlayer,
   savePlayer,
   applyPvpResult,
@@ -36,6 +40,7 @@ import {
   fetchProfile,
   resolvePlayerBootstrap,
 } from './lib/profileSync';
+import { pvpAccept, pvpDecline, pvpIncoming } from './lib/pvp';
 import { supabase } from './lib/supabase';
 import {
   addCustomRecipe,
@@ -142,6 +147,9 @@ export default function App() {
   const [unlockId, setUnlockId] = useState(null);
   const [justUnlocked, setJustUnlocked] = useState(null);
   const [boss, setBoss] = useState(null);
+  const [pvpSeek, setPvpSeek] = useState(null);
+  const [pvpIncomingCall, setPvpIncomingCall] = useState(null);
+  const [pvpPick, setPvpPick] = useState(null);
   const [bossReward, setBossReward] = useState(null);
   const [breachReward, setBreachReward] = useState(null);
   const [chatUnread, setChatUnread] = useState(false);
@@ -393,6 +401,66 @@ export default function App() {
     await signOut();
   }, [player, user?.id, syncPlayerToCloud, signOut]);
 
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let stop = false;
+    const tick = async () => {
+      const rows = await pvpIncoming();
+      if (!stop) setPvpIncomingCall(rows[0] ?? null);
+    };
+    tick();
+    const id = setInterval(tick, 8000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!player?.notifyDaily || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const today = dayKey();
+    const key = 'system.notify.v1';
+    if (localStorage.getItem(key) === today) return;
+    const streak = player.attendance?.streak || 0;
+    const closed = player.attendance?.lastClosed === today;
+    const hour = new Date().getHours();
+    let body = '';
+    if (boss && (boss.hp ?? 0) > 0) body = `Босс дня ещё жив: ${Math.round(boss.hp)} HP.`;
+    else if (streak > 0 && !closed && hour >= 18) body = `Серия явки ${streak} дн. сгорит, если не закрыть контракт.`;
+    if (!body) return;
+    localStorage.setItem(key, today);
+    try {
+      new Notification('Система', { body, icon: '/icon.svg' });
+    } catch {
+      /* браузер не показал уведомление */
+    }
+  }, [player?.notifyDaily, player?.attendance?.streak, player?.attendance?.lastClosed, boss]);
+
+  useEffect(() => {
+    if (!player?.notifyDaily || !boss || (boss.hp ?? 0) <= 0) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const today = dayKey();
+    const key = 'system.notify.boss.v1';
+    if (localStorage.getItem(key) === today) return;
+    const hourAgo = Date.now() - 60 * 60 * 1000;
+    const dealt = (boss.log ?? []).reduce((sum, row) => {
+      const at = Date.parse(row.createdAt || '');
+      if (!Number.isFinite(at) || at < hourAgo) return sum;
+      return sum + (Number(row.damage) || 0);
+    }, 0);
+    const maxHp = Number(boss.maxHp) || 0;
+    if (maxHp <= 0 || dealt < maxHp * 0.25) return;
+    localStorage.setItem(key, today);
+    try {
+      new Notification('Система', {
+        body: `За час боссу снесли ${Math.round(dealt)} урона. Он ещё жив.`,
+        icon: '/icon.svg',
+      });
+    } catch {
+      /* браузер не показал уведомление */
+    }
+  }, [player?.notifyDaily, boss]);
+
   if (authLoading || (user && bootstrapping && !player)) {
     return (
       <div className="system-bg flex min-h-dvh items-center justify-center">
@@ -442,6 +510,19 @@ export default function App() {
               if (sync && sync.ok === false) {
                 return { error: sync.error || 'Не удалось сохранить пол в облаке' };
               }
+              return { ok: true };
+            }}
+            onNotifyDaily={async (on) => {
+              if (on && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                const perm = await Notification.requestPermission();
+                if (perm !== 'granted') return { error: 'Браузер не разрешил уведомления' };
+              }
+              const result = setNotifyDaily(player, on);
+              const next = stampPlayer(result.player);
+              setPlayer(next);
+              notify(result.events ?? []);
+              const sync = await syncPlayerToCloud(next);
+              if (sync && sync.ok === false) return { error: sync.error || 'Не удалось сохранить' };
               return { ok: true };
             }}
             onHideActivity={async (hidden) => {
@@ -561,9 +642,16 @@ export default function App() {
               }}
             />
           )}
-          {tab === 'pvp' && <PvpScreen player={player} onResult={(payload) => commit(applyPvpResult(player, payload))} />}
+          {tab === 'pvp' && (
+            <PvpScreen
+              player={player}
+              seek={pvpSeek}
+              onSeekDone={() => setPvpSeek(null)}
+              onResult={(payload) => commit(applyPvpResult(player, payload))}
+            />
+          )}
           {tab === 'chat' && <ChatScreen player={player} onSeen={markChatSeen} />}
-          {tab === 'rank' && <LeaderboardScreen player={player} />}
+          {tab === 'rank' && <LeaderboardScreen player={player} onChallenge={setPvpPick} />}
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-neon/20 bg-void/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
@@ -594,6 +682,71 @@ export default function App() {
 
       {bossReward && <BossRewardCard reward={bossReward} onClose={() => setBossReward(null)} />}
       {breachReward && <BreachClearCard reward={breachReward} onClose={() => setBreachReward(null)} />}
+
+      {pvpIncomingCall && (
+        <div className="fixed inset-x-0 bottom-24 z-[75] mx-auto w-full max-w-md px-4">
+          <div className="system-panel space-y-2 p-3">
+            <p className="text-sm text-zinc-100">
+              {pvpIncomingCall.fromName} вызывает на {pvpExercise(pvpIncomingCall.exercise).name.toLowerCase()}.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await pvpAccept(pvpIncomingCall.id);
+                  setPvpIncomingCall(null);
+                  if (res?.match) {
+                    setPvpSeek({ match: res.match, you: res.you, exercise: res.exercise });
+                    setTab('pvp');
+                  }
+                }}
+                className="rounded-lg bg-neon py-2 text-xs font-bold text-zinc-950"
+              >
+                Принять
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await pvpDecline(pvpIncomingCall.id);
+                  setPvpIncomingCall(null);
+                }}
+                className="rounded-lg border border-zinc-700 py-2 text-xs font-bold text-zinc-300"
+              >
+                Отклонить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pvpPick && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/75 p-4 sm:items-center" onClick={() => setPvpPick(null)}>
+          <div className="system-panel modal-in w-full max-w-sm space-y-3 p-4" onClick={(e) => e.stopPropagation()}>
+            <p className="text-center text-sm text-zinc-100">Вызов: {pvpPick.name}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {PVP_EXERCISES.map((ex) => (
+                <button
+                  key={ex.id}
+                  type="button"
+                  onClick={() => {
+                    const target = pvpPick;
+                    setPvpPick(null);
+                    setPvpSeek({ exercise: ex.id, targetId: target.id, name: target.name });
+                    setTab('pvp');
+                  }}
+                  className="rounded-lg border border-zinc-700 px-2 py-3 text-xs font-bold text-zinc-100"
+                >
+                  {ex.name}
+                  <span className="mt-1 block text-[10px] text-zinc-500">{pvpRatingsOf(player)[ex.id]}</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setPvpPick(null)} className="w-full rounded-lg border border-zinc-700 py-2 text-xs font-bold text-zinc-400">
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
 
       {unlockId && (
         <UnlockOverlay

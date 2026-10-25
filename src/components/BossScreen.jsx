@@ -102,7 +102,8 @@ export default function BossScreen({ player, boss, onClaimBoss }) {
   const spectator = isBossSpectator(player?.name);
   const bossReady = boss && !spectator && bossHp === 0 && (boss.mine ?? 0) > 0 && player.bossClaimDate !== today;
   const log = boss?.log ?? [];
-  const board = bossHp === 0 ? bossDamageBoard(boss) : [];
+  const fullBoard = boss ? bossDamageBoard(boss) : [];
+  const board = bossHp === 0 ? fullBoard : fullBoard.slice(0, 3);
 
   return (
     <div className="space-y-4">
@@ -144,9 +145,14 @@ export default function BossScreen({ player, boss, onClaimBoss }) {
                   : 'Общий бой и лог включатся после нового SQL из supabase/daily_boss.sql. Пока удары видны только на этом устройстве.'}
               </p>
             )}
-            {bossHp === 0 && (
+            {boss && (
               <div className="space-y-1.5">
-                <h3 className="font-display text-[10px] tracking-widest text-zinc-400">ТАБЛИЦА УРОНА</h3>
+                <h3 className="font-display text-[10px] tracking-widest text-zinc-400">
+                  {bossHp === 0 ? 'ТАБЛИЦА УРОНА' : 'СЕЙЧАС В БОЮ'}
+                </h3>
+                {bossHp > 0 && (
+                  <p className="text-[11px] text-zinc-400">До падения {bossHp.toLocaleString('ru-RU')} HP. Тройка по урону.</p>
+                )}
                 {board.length === 0 ? (
                   <p className="text-[11px] text-zinc-500">Ударов нет.</p>
                 ) : (

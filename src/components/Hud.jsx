@@ -74,7 +74,7 @@ function TipCard({ title, body, color, onClose }) {
   );
 }
 
-export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onResetAccount, onRename, onChangeGender, onHideActivity }) {
+export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onResetAccount, onRename, onChangeGender, onHideActivity, onNotifyDaily }) {
   const { level, xp, need } = levelFromXp(player.xp);
   const maxHpVal = player.breach?.active ? (player.breach.playerMaxHp ?? playerMaxHp(player)) : playerMaxHp(player);
   const hpVal = player.breach?.active ? (player.breach.playerHp ?? getPlayerHp(player)) : getPlayerHp(player);
@@ -271,6 +271,7 @@ export default function Hud({ player, onOpenEnergy, onOpenTitles, onSignOut, onR
         onRename={onRename}
         onChangeGender={onChangeGender}
         onHideActivity={onHideActivity}
+        onNotifyDaily={onNotifyDaily}
       />
     )}
     </>
