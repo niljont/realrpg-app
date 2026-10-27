@@ -10,7 +10,7 @@ import {
   previewStepsEnd,
   rankLevelHint,
 } from '../lib/breaches';
-import { attackApCost, getGearBonuses } from '../lib/equipment';
+import { attackApCost, getGearBonuses, isMageWeapon } from '../lib/equipment';
 import { WORLD_NODES, formatCooldown, nodeCooldownLeft, nodeLootPreview, pickNodeSite } from '../lib/world';
 
 /** Плашка после полной зачистки Бреши. */
@@ -256,6 +256,7 @@ function BreachCombat({
   player,
   onStrike,
   onDefend,
+  onBarrier,
   onEndTurn,
   onTrinket,
   onContinue,
@@ -390,6 +391,16 @@ function BreachCombat({
           Отступить
         </button>
       </div>
+      {isMageWeapon(player) && (
+        <button
+          type="button"
+          onClick={onBarrier}
+          disabled={ap < 1}
+          className="w-full rounded-xl border border-sky-400/40 bg-sky-400/10 py-2.5 text-xs font-bold text-sky-200 disabled:opacity-40"
+        >
+          Барьер (1 AP){s.barrierCut ? ' · готов' : ''}
+        </button>
+      )}
       {showTrinket && (
         <button
           type="button"
@@ -416,6 +427,7 @@ function RadarTab({
   onEnter,
   onStrike,
   onDefend,
+  onBarrier,
   onEndTurn,
   onTrinket,
   onContinue,
@@ -443,6 +455,7 @@ function RadarTab({
         player={player}
         onStrike={onStrike}
         onDefend={onDefend}
+        onBarrier={onBarrier}
         onEndTurn={onEndTurn}
         onTrinket={onTrinket}
         onContinue={onContinue}
@@ -543,6 +556,7 @@ export default function WorldScreen({
   onEnterBreach,
   onBreachStrike,
   onBreachDefend,
+  onBreachBarrier,
   onBreachEndTurn,
   onBreachTrinket,
   onBreachContinue,
@@ -581,6 +595,7 @@ export default function WorldScreen({
             onEnter={onEnterBreach}
             onStrike={onBreachStrike}
             onDefend={onBreachDefend}
+            onBarrier={onBreachBarrier}
             onEndTurn={onBreachEndTurn}
             onTrinket={onBreachTrinket}
             onContinue={onBreachContinue}

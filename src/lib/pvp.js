@@ -40,6 +40,12 @@ export async function pvpCancel() {
   await supabase.rpc('pvp_cancel');
 }
 
+/** Бой закончен: следующий поиск не должен снова открыть этот матч. */
+export async function pvpFinish(matchId) {
+  if (!matchId) return;
+  await supabase.rpc('pvp_finish', { p_match: matchId });
+}
+
 /** @returns {Promise<object[]>} */
 export async function pvpChallenge(targetId, username, rating, exercise) {
   const { data, error } = await supabase.rpc('pvp_challenge', {

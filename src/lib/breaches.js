@@ -16,6 +16,8 @@ import {
   attackApCost,
   getGearBonuses,
   getPlayerHp,
+  isMageWeapon,
+  mageWaveShield,
   mitigateIncoming,
   playerMaxHp,
   rollPlayerAttack,
@@ -566,8 +568,8 @@ export function enterBreach(p, breachId) {
     enemy: first,
     playerHp: cur,
     playerMaxHp: max,
-    playerShield: gear.startShield ?? 0,
-    playerMaxShield: gear.startShield ?? 0,
+    playerShield: mageWaveShield(ensured),
+    playerMaxShield: mageWaveShield(ensured),
     combatAp: COMBAT_AP_MAX,
     turn: 1,
     phase: 'player',
@@ -584,7 +586,7 @@ export function enterBreach(p, breachId) {
       `[СИСТЕМА] Тактический режим. Combat AP: ${COMBAT_AP_MAX} за ход (глобальная энергия не тратится).`,
       `[СИСТЕМА] Цель 1/${enemies.length}: ${first.emoji} ${first.name} · Ур.${first.level} · HP ${first.hp}`,
       `[СИСТЕМА] Намерение врага: ${intent.icon} ${intent.label}${intent.damage != null ? ` (${intent.damage})` : ''}${intent.armor != null ? ` (+${intent.armor} броня)` : ''}`,
-      `[СИСТЕМА] Игрок: HP ${cur}/${max} · STR ${stats.STR} · AGI ${stats.AGI} · END ${stats.END} · INT ${stats.INT} · Броня ${gear.armor} · Щит ${gear.startShield}`,
+      `[СИСТЕМА] Игрок: HP ${cur}/${max} · STR ${stats.STR} · AGI ${stats.AGI} · END ${stats.END} · INT ${stats.INT} · Броня ${gear.armor} · Щит ${mageWaveShield(ensured)}`,
     ],
   };
 
@@ -654,6 +656,21 @@ export function breachCombatStrike(p) {
   return { player: { ...withHp(p, session.playerHp, max), breach: session }, events: [] };
 }
 
+/** Барьер мага: 1 Combat AP, следующий удар врага режется вдвое. */
+export function breachCombatBarrier(p) {
+  const s = p.breach;
+  if (!s?.active) return { error: 'Вы не в Бреши' };
+  if (s.ui === 'victory') return { error: 'Сначала заберите победу' };
+  if (s.phase !== 'player') return { error: 'Сейчас ход врага' };
+  if (!isMageWeapon(p)) return { error: 'Барьер доступен с оружием мага' };
+  if ((s.combatAp ?? 0) < 1) return { error: 'Нужно 1 Combat AP' };
+  const session = cloneSession(s);
+  session.combatAp -= 1;
+  session.barrierCut = 0.5;
+  session.log.push(`[ХОД ${session.turn}] Барьер: следующий удар врага −50%.`);
+  return { player: { ...p, breach: session }, events: [] };
+}
+
 /** Блок щитом / защитная стойка (1 Combat AP). */
 export function breachCombatDefend(p) {
   const s = p.breach;
@@ -711,6 +728,12 @@ function resolveEnemyTurn(p, session) {
       session.log.push(`[ВРАГ] ${session.enemy.name}: ${intent.icon} ${intent.label} — уклонение!`);
     } else {
       let absorb = session.defendAbsorb ?? 0;
+      if (session.barrierCut) {
+        const before = raw;
+        raw = Math.max(0, Math.round(raw * (1 - session.barrierCut)));
+        session.barrierCut = 0;
+        session.log.push(`[ВРАГ] Барьер срезал ${before - raw} урона.`);
+      }
       const mit = mitigateIncoming(p, raw, { stanceReduce: session.stanceReduce ?? 0, absorb });
       absorb = mit.absorbLeft;
       let dmg = mit.damage;
@@ -797,6 +820,12 @@ export function breachCombatContinue(p) {
   session.combatAp = COMBAT_AP_MAX;
   session.defendAbsorb = 0;
   session.stanceReduce = 0;
+  if (isMageWeapon(p)) {
+    const cap = mageWaveShield(p);
+    session.playerMaxShield = Math.max(session.playerMaxShield ?? 0, cap);
+    session.playerShield = Math.max(session.playerShield ?? 0, cap);
+    session.log.push(`[СИСТЕМА] Щит мага восстановлен: ${session.playerShield}.`);
+  }
   session.log.push(
     `[СИСТЕМА] Следующая цель ${session.room + 1}/${session.enemies.length}: ${session.enemy.emoji} ${session.enemy.name} · Ур.${session.enemy.level}`,
   );

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Swords } from 'lucide-react';
 import { usePoseCamera } from './PushupCamera';
 import { PVP_EXERCISES, pvpExercise, pvpRatingsOf } from '../lib/game';
-import { PVP_FIGHT_MS, PVP_OPP_COLOR, PVP_SEARCH_MS, PVP_YOU_COLOR, pvpCancel, pvpChallenge, pvpPoll, pvpSync } from '../lib/pvp';
+import { PVP_FIGHT_MS, PVP_OPP_COLOR, PVP_SEARCH_MS, PVP_YOU_COLOR, pvpCancel, pvpChallenge, pvpFinish, pvpPoll, pvpSync } from '../lib/pvp';
 
 function TugBar({ mine, opp }) {
   const total = mine + opp;
@@ -68,7 +68,11 @@ export default function PvpScreen({ player, onResult, seek, onSeekDone }) {
         return;
       }
       const res = await pvpPoll(player?.name, rating, exercise.id, targetRef.current);
-      if (cancel || res.status !== 'matched' || !res.match) return;
+      if (cancel) {
+        pvpCancel();
+        return;
+      }
+      if (res.status !== 'matched' || !res.match) return;
       matchRef.current = { id: res.match.id, you: res.you };
       setOppId(res.you === 'a' ? res.match.bId || '' : res.match.aId || '');
       setBot(false);
@@ -86,6 +90,18 @@ export default function PvpScreen({ player, onResult, seek, onSeekDone }) {
       pvpCancel();
     };
   }, [phase, player?.name, rating, exercise.id]);
+
+  useEffect(() => {
+    if (phase !== 'search') return undefined;
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') {
+        pvpCancel();
+        setPhase('idle');
+      }
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [phase]);
 
   useEffect(() => {
     if (phase !== 'countdown') return undefined;
@@ -155,6 +171,7 @@ export default function PvpScreen({ player, onResult, seek, onSeekDone }) {
   useEffect(() => {
     if (phase !== 'result' || finished.current === 'sent') return undefined;
     finished.current = 'sent';
+    if (matchRef.current?.id) pvpFinish(matchRef.current.id);
     const result = mine > opp ? 'win' : mine < opp ? 'loss' : 'draw';
     onResult?.({ outcome: result, bot, reps: mine, exercise: exercise.id });
     return undefined;

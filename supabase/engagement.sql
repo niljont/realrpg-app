@@ -1,5 +1,9 @@
 -- Вовлечённость: дуэль по упражнению, вызов, общий счётчик дня, серия в профиле.
 -- Если дуэлей ещё не было, сначала выполни supabase/pvp.sql, затем этот файл.
+-- Повторный запуск закрывает зависшие бои, чтобы поиск не возвращал старого соперника.
+
+update public.pvp_matches set status = 'done' where status = 'live';
+delete from public.pvp_queue;
 
 alter table public.pvp_queue add column if not exists exercise text not null default 'pushups';
 alter table public.pvp_queue add column if not exists target_id uuid;
@@ -62,11 +66,19 @@ begin
   perform pg_advisory_xact_lock(81421);
 
   delete from public.pvp_queue q
-  where q.created_at < now() - interval '90 seconds' and q.user_id <> uid;
+  where q.created_at < now() - interval '15 seconds' and q.user_id <> uid;
+
+  update public.pvp_matches m
+    set status = 'done'
+    where m.status = 'live'
+      and m.created_at < now() - interval '70 seconds'
+      and (m.a_id = uid or m.b_id = uid);
 
   select * into row
   from public.pvp_matches m
-  where m.status = 'live' and (m.a_id = uid or m.b_id = uid)
+  where m.status = 'live'
+    and m.created_at > now() - interval '70 seconds'
+    and (m.a_id = uid or m.b_id = uid)
   order by m.created_at desc
   limit 1;
 
@@ -102,6 +114,7 @@ begin
   where q.user_id <> uid
     and q.exercise = ex
     and abs(q.rating - rate) <= 500
+    and q.created_at > now() - interval '15 seconds'
     and (p_target is null or q.user_id = p_target)
     and (q.target_id is null or q.target_id = uid)
   order by q.created_at
@@ -132,6 +145,25 @@ begin
   );
 end;
 $fn$;
+
+create or replace function public.pvp_finish(p_match uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $fn$
+begin
+  if auth.uid() is null then
+    return;
+  end if;
+  update public.pvp_matches
+    set status = 'done'
+    where id = p_match and status = 'live' and (a_id = auth.uid() or b_id = auth.uid());
+end;
+$fn$;
+
+revoke all on function public.pvp_finish(uuid) from public;
+grant execute on function public.pvp_finish(uuid) to authenticated;
 
 create or replace function public.pvp_incoming()
 returns jsonb

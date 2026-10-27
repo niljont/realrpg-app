@@ -693,6 +693,24 @@ export function attackApCost(p) {
   return 1;
 }
 
+/** Оружие мага: посох, жезл и другое с магическим уроном. */
+export function isMageWeapon(p) {
+  const main = getGearItem(eqOf(p).mainHand, p);
+  return main?.damage?.type === 'magic';
+}
+
+/**
+ * Щит мага на каждую волну: щит экипировки и 2 единицы за очко интеллекта.
+ * @param {object} p
+ * @returns {number}
+ */
+export function mageWaveShield(p) {
+  const gear = getGearBonuses(p);
+  if (!isMageWeapon(p)) return gear.startShield ?? 0;
+  const intel = getStats(p).INT ?? 0;
+  return (gear.startShield ?? 0) + intel * 2;
+}
+
 function rollOneWeapon(weapon, stats, dmgMul, gear) {
   if (!weapon?.damage) return { dmg: 0, crit: false, magic: false };
   const { min, max, type } = weapon.damage;

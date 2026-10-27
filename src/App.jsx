@@ -65,6 +65,7 @@ import { touchPresence } from './lib/profileSync';
 import {
   breachCombatContinue,
   breachCombatDefend,
+  breachCombatBarrier,
   breachCombatEndTurn,
   breachCombatStrike,
   breachCombatTrinket,
@@ -607,6 +608,7 @@ export default function App() {
               onEnterBreach={(id) => run(enterBreach, id)}
               onBreachStrike={() => run(breachCombatStrike)}
               onBreachDefend={() => run(breachCombatDefend)}
+              onBreachBarrier={() => run(breachCombatBarrier)}
               onBreachEndTurn={() => run(breachCombatEndTurn)}
               onBreachTrinket={() => run(breachCombatTrinket)}
               onBreachContinue={() => {
