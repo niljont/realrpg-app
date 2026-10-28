@@ -1,3 +1,5 @@
+import { SELF_RIVAL_BONUS, noteEffort } from './engagement';
+
 export const STORAGE_KEY = 'system.player.v1';
 
 export const STATS = ['STR', 'END', 'AGI', 'INT', 'WIL'];
@@ -28,13 +30,13 @@ export const EXERCISES = {
     { id: 'pushups', name: 'Отжимания', unit: 'повт.', rate: 1 },
     { id: 'pullups', name: 'Подтягивания', unit: 'повт.', rate: 3 },
     { id: 'legsquats', name: 'Приседания', unit: 'повт.', rate: 1 },
-    { id: 'boulder', name: 'Скалодром: болдеринг', unit: 'трасса', rate: 4, loadDifficulty: true },
+    { id: 'boulder', name: 'Скалодром: болдеринг', unit: 'трасса', rate: 8, loadDifficulty: true, climb: { STR: 8, AGI: 4, END: 2 } },
     { id: 'implement', name: 'Упражнение со снарядом', unit: 'повт.', rate: 1, loadDifficulty: true },
   ],
   END: [
     { id: 'abs', name: 'Пресс', unit: 'повт.', rate: 1 },
     { id: 'plank', name: 'Планка', unit: 'сек', rate: 0.5 },
-    { id: 'climbroute', name: 'Скалодром: трудность', unit: 'трасса', rate: 6, loadDifficulty: true },
+    { id: 'climbroute', name: 'Скалодром: трудность', unit: 'трасса', rate: 10, loadDifficulty: true, climb: { END: 10, STR: 4, AGI: 2 } },
     { id: 'run', name: 'Бег', unit: 'км', rate: 50, step: 0.1 },
   ],
   AGI: [
@@ -805,6 +807,7 @@ export function xpMultiplier(p, stat, now = Date.now()) {
   else if (isAnabolic(p, now)) m += ANABOLIC_XP_BONUS;
   else if (isSated(p, now)) m += SATIETY_XP_BONUS;
   if (isFocused(p, now)) m += FOCUS_XP_BONUS;
+  if (p?.dayScore?.date === dayKey(now) && p.dayScore.beaten) m += SELF_RIVAL_BONUS;
   return m;
 }
 
@@ -832,6 +835,33 @@ export const exercisePoints = (ex, amount, rateOverride) => {
 /** Итоговые очки прокачки — целые ( вниз ), иначе Postgres integer ломает синк. */
 export function floorAwardPoints(raw) {
   return Math.max(0, Math.floor(Number(raw) || 0));
+}
+
+/**
+ * Очки скалодрома по нескольким статам. factor — множитель сложности (0.5…2).
+ * @param {object} ex
+ * @param {number} amount
+ * @param {number} factor
+ * @param {object} p
+ * @param {number} [now]
+ * @returns {{ byStat: Record<string, number>, total: number } | null}
+ */
+export function climbAwards(ex, amount, factor, p, now = Date.now()) {
+  if (!ex?.climb || !p) return null;
+  const qty = Math.max(0, Number(amount) || 0);
+  const scale = Number(factor);
+  if (!(scale > 0) || qty <= 0) return { byStat: {}, total: 0 };
+  const byStat = {};
+  let total = 0;
+  for (const stat of STATS) {
+    const base = Number(ex.climb[stat]) || 0;
+    if (base <= 0) continue;
+    const pts = floorAwardPoints(base * scale * qty * xpMultiplier(p, stat, now));
+    if (pts <= 0) continue;
+    byStat[stat] = pts;
+    total += pts;
+  }
+  return { byStat, total };
 }
 
 export function findExercise(stat, id, p = null) {
@@ -1085,6 +1115,9 @@ export function createPlayer(name, gender) {
     lastActiveDate: dayKey(now),
     attendance: { streak: 0, best: 0, lastClosed: '', freeWeek: '', milestones: [] },
     daily: null,
+    weekGoal: null,
+    weekChest: null,
+    dayScore: null,
     returnOffer: null,
     bossClaimDate: '',
     radar: null,
@@ -1167,6 +1200,9 @@ export function hydratePlayer(p) {
       milestones: Array.isArray(p.attendance?.milestones) ? p.attendance.milestones : [],
     },
     daily: p.daily?.date ? p.daily : null,
+    weekGoal: p.weekGoal?.week ? p.weekGoal : null,
+    weekChest: p.weekChest?.id ? p.weekChest : null,
+    dayScore: p.dayScore?.date ? p.dayScore : null,
     returnOffer: p.returnOffer?.date ? p.returnOffer : null,
     bossClaimDate: p.bossClaimDate ?? '',
     hideActivity: Boolean(p.hideActivity),
@@ -1461,27 +1497,29 @@ export function applyTraining(p, stat, exId, amount, rateOverride, now = Date.no
     return { error: 'Квест уже выполнен сегодня' };
   }
   if (ex.loadDifficulty && rateOverride == null) return { error: 'Выберите сложность' };
+  if (ex.climb) return applyClimbTraining(p, stat, ex, amount, rateOverride, now);
   const qty = ex.custom ? 1 : amount;
   const base = exercisePoints(ex, qty, rateOverride);
   if (base <= 0) return { error: 'Введите количество' };
 
-  const rawPoints = base * xpMultiplier(p, stat, now);
+  const effort = ex.custom ? { player: p, events: [] } : noteEffort(p, { exId, name: ex.name, unit: ex.unit, amount: qty, today });
+  const rawPoints = base * xpMultiplier(effort.player, stat, now);
   const points = floorAwardPoints(rawPoints);
   if (points <= 0) return { error: 'Слишком мало для записи (нужно ≥ 1 pt после округления вниз)' };
-  const events = [];
-  const prevLevel = levelFromXp(p.xp).level;
-  const prevStat = statLevel(p.statPoints[stat]);
+  const events = [...(effort.events ?? [])];
+  const prevLevel = levelFromXp(effort.player.xp).level;
+  const prevStat = statLevel(effort.player.statPoints[stat]);
 
   let next = {
-    ...p,
-    xp: Math.floor((p.xp ?? 0) + points),
+    ...effort.player,
+    xp: Math.floor((effort.player.xp ?? 0) + points),
     statPoints: {
-      ...p.statPoints,
-      [stat]: Math.floor((p.statPoints[stat] ?? 0) + points),
+      ...effort.player.statPoints,
+      [stat]: Math.floor((effort.player.statPoints[stat] ?? 0) + points),
     },
-    totals: addTotals(p.totals, stat, { [exId]: qty }),
+    totals: addTotals(effort.player.totals, stat, { [exId]: qty }),
     log: pruneActivityLog([
-      ...(p.log ?? []),
+      ...(effort.player.log ?? []),
       {
         ts: now,
         date: today,
@@ -1531,6 +1569,76 @@ export function applyTraining(p, stat, exId, amount, rateOverride, now = Date.no
     player: next,
     events,
     daily: { action: ex.custom ? 'quest' : 'train', amount: points },
+  };
+}
+
+/**
+ * Одна трасса качает несколько статов. В журнал и достижения трасса входит один раз.
+ * @param {object} p
+ * @param {string} stat
+ * @param {object} ex
+ * @param {number} amount
+ * @param {number} rateOverride
+ * @param {number} now
+ */
+function applyClimbTraining(p, stat, ex, amount, rateOverride, now) {
+  const qty = Number(amount) || 0;
+  const effort = noteEffort(p, { exId: ex.id, name: ex.name, unit: ex.unit, amount: qty, today: dayKey(now) });
+  const award = climbAwards(ex, qty, rateOverride, effort.player, now);
+  if (!award || award.total <= 0) return { error: 'Введите количество' };
+  const events = [...(effort.events ?? [])];
+  const prevLevel = levelFromXp(effort.player.xp).level;
+  const prevStats = {};
+  for (const key of Object.keys(award.byStat)) prevStats[key] = statLevel(p.statPoints[key]);
+
+  const statPoints = { ...effort.player.statPoints };
+  for (const [key, pts] of Object.entries(award.byStat)) {
+    statPoints[key] = Math.floor((statPoints[key] ?? 0) + pts);
+  }
+
+  let next = {
+    ...effort.player,
+    xp: Math.floor((effort.player.xp ?? 0) + award.total),
+    statPoints,
+    totals: addTotals(effort.player.totals, stat, { [ex.id]: qty }),
+    log: pruneActivityLog([
+      ...(effort.player.log ?? []),
+      {
+        ts: now,
+        date: dayKey(),
+        kind: 'train',
+        stat,
+        exId: ex.id,
+        amount: qty,
+        points: award.total,
+        split: award.byStat,
+        rate: rateOverride,
+      },
+    ], now),
+  };
+
+  const parts = Object.entries(award.byStat).map(([key, pts]) => `+${pts} ${key}`);
+  events.push({ type: 'gain', text: `${parts.join(' · ')} · +${award.total} XP` });
+
+  for (const [key, pts] of Object.entries(award.byStat)) {
+    if (pts <= 0) continue;
+    const nextStat = statLevel(next.statPoints[key]);
+    if (nextStat > prevStats[key]) {
+      events.push({ type: 'stat', text: `${STAT_META[key].label} повышена: ${prevStats[key]} → ${nextStat}` });
+    }
+  }
+
+  const newLevel = levelFromXp(next.xp).level;
+  if (newLevel > prevLevel) {
+    next = { ...next, ap: next.maxAp };
+    events.push({ type: 'level', text: `УРОВЕНЬ ПОВЫШЕН: ${newLevel}! Энергия восстановлена` });
+  }
+
+  next = checkAchievements(next, events);
+  return {
+    player: next,
+    events,
+    daily: { action: 'train', amount: award.total },
   };
 }
 

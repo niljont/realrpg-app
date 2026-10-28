@@ -60,7 +60,8 @@ import { craftRecipe } from './lib/crafting';
 import { applyHpRegen, buyGear, equipItem, unequipSlot } from './lib/equipment';
 import { ensureVendorStock } from './lib/loot';
 import { fetchChatMessages, readChatSeen, subscribeChat, writeChatSeen } from './lib/chat';
-import { applyDailyProgress, claimBossReward, claimContract, claimReturn, ensureDaily, isBossSpectator, strikeDailyBoss } from './lib/daily';
+import { applyDailyProgress, claimBossReward, claimContract, claimReturn, claimWeekChest, ensureDaily, isBossSpectator, strikeDailyBoss } from './lib/daily';
+import { pickWeekGoal } from './lib/engagement';
 import { touchPresence } from './lib/profileSync';
 import {
   breachCombatContinue,
@@ -587,6 +588,8 @@ export default function App() {
               onOpenRequestHandled={() => setStatusOpenRequest(null)}
               onClaimContract={() => commit(claimContract(player))}
               onClaimReturn={() => commit(claimReturn(player))}
+              onPickWeekGoal={(id, target) => commit(pickWeekGoal(player, id, target, dayKey()))}
+              onClaimWeekChest={() => commit(claimWeekChest(player))}
             />
           )}
           {tab === 'training' && (

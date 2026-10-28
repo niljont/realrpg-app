@@ -7,6 +7,7 @@ import {
   LOAD_DIFFICULTIES,
   STATS,
   STAT_META,
+  climbAwards,
   customQuestStreakView,
   dayKey,
   exercisePoints,
@@ -26,11 +27,21 @@ function pointsPreview(raw) {
   return { awarded, label: ` · +${awarded} pt` };
 }
 
-function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff, showCheck, onConfirm, onCamera }) {
+function climbRateLine(ex, factor) {
+  return Object.entries(ex.climb)
+    .filter(([, base]) => base > 0)
+    .map(([stat, base]) => `${base * factor} ${STAT_META[stat].label}`)
+    .join(' · ');
+}
+
+function ExerciseRow({ ex, player, color, mult, amount, diff, onAmount, onDiff, showCheck, onConfirm, onCamera }) {
   const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === diff) : null;
   const rate = load?.rate ?? ex.rate;
-  const raw = exercisePoints(ex, Number(amount) || 0, rate) * mult;
-  const { awarded: pts, label: ptsLabel } = pointsPreview(raw);
+  const climb = ex.climb ? climbAwards(ex, Number(amount) || 0, rate, player) : null;
+  const raw = ex.climb ? climb?.total ?? 0 : exercisePoints(ex, Number(amount) || 0, rate) * mult;
+  const { awarded: pts, label: ptsLabel } = ex.climb
+    ? { awarded: climb?.total ?? 0, label: (climb?.total ?? 0) > 0 ? ` · +${climb.total} pt` : '' }
+    : pointsPreview(raw);
 
   return (
     <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2.5">
@@ -38,7 +49,11 @@ function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff, showChec
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-zinc-100">{ex.name}</div>
           <div className="text-[10px] text-zinc-500">
-            {ex.loadDifficulty ? (
+            {ex.climb ? (
+              <>
+                1 {ex.unit} ({load?.label}): {climbRateLine(ex, rate)}
+              </>
+            ) : ex.loadDifficulty ? (
               <>
                 1 {ex.unit} = {rate} pt ({load?.label})
               </>
@@ -102,7 +117,9 @@ function ExerciseRow({ ex, color, mult, amount, diff, onAmount, onDiff, showChec
                 }}
               >
                 {d.label}
-                <span className="mt-0.5 block font-display text-[9px] opacity-80">{d.rate} pt</span>
+                <span className="mt-0.5 block font-display text-[9px] opacity-80">
+                  {ex.climb ? `×${d.rate}` : `${d.rate} pt`}
+                </span>
               </button>
             );
           })}
@@ -292,10 +309,12 @@ function CustomQuestRow({ quest, color, mult, today, onComplete, onBlock, onRemo
   );
 }
 
-function filledExercise(stat, ex, draft, mult) {
+function filledExercise(stat, ex, draft, mult, player) {
   const load = ex.loadDifficulty ? LOAD_DIFFICULTIES.find((d) => d.id === draft.diff) : null;
   const rate = load?.rate ?? ex.rate;
-  const pts = floorAwardPoints(exercisePoints(ex, Number(draft.amount) || 0, rate) * mult);
+  const pts = ex.climb
+    ? (climbAwards(ex, Number(draft.amount) || 0, rate, player)?.total ?? 0)
+    : floorAwardPoints(exercisePoints(ex, Number(draft.amount) || 0, rate) * mult);
   if (pts <= 0) return null;
   return {
     stat,
@@ -412,7 +431,7 @@ export default function TrainingScreen({ player, onTrain, onTrainMany, onAddQues
           const filled = STATS.flatMap((s) => {
             const m = xpMultiplier(player, s);
             return EXERCISES[s]
-              .map((ex) => filledExercise(s, ex, drafts[`${s}:${ex.id}`] ?? { amount: '', diff: 'normal' }, m))
+              .map((ex) => filledExercise(s, ex, drafts[`${s}:${ex.id}`] ?? { amount: '', diff: 'normal' }, m, player))
               .filter(Boolean);
           });
           const batch = filled.length >= 2;
@@ -448,11 +467,12 @@ export default function TrainingScreen({ player, onTrain, onTrainMany, onAddQues
                 {EXERCISES[stat].map((ex) => {
                   const key = `${stat}:${ex.id}`;
                   const draft = drafts[key] ?? { amount: '', diff: 'normal' };
-                  const row = filledExercise(stat, ex, draft, mult);
+                  const row = filledExercise(stat, ex, draft, mult, player);
                   return (
                     <ExerciseRow
                       key={`${stat}-${ex.id}`}
                       ex={ex}
+                      player={player}
                       color={color}
                       mult={mult}
                       amount={draft.amount}
@@ -563,7 +583,10 @@ export default function TrainingScreen({ player, onTrain, onTrainMany, onAddQues
                     {ex?.custom ? '' : ` × ${formatAmount(e.amount)} ${ex?.unit ?? ''}`}
                   </span>
                   <span className="tabular-nums text-zinc-500">
-                    {new Date(e.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })} · +{e.points}
+                    {new Date(e.ts).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}
+                    {e.split
+                      ? ` · ${Object.entries(e.split).map(([s, n]) => `+${n} ${s}`).join(' ')}`
+                      : ` · +${e.points}`}
                   </span>
                 </li>
               );

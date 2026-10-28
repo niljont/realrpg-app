@@ -273,26 +273,7 @@ function BreachCombat({
   const strikeCost = attackApCost(player);
   const showTrinket = Boolean(gear.trinketShield) && onTrinket;
 
-  if (s.ui === 'victory' && s.victory) {
-    return (
-      <div className="space-y-3">
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-5 text-center">
-          <div className="font-display text-sm tracking-widest text-amber-300">ПОБЕДА</div>
-          <div className="mt-2 text-lg text-zinc-100">{s.victory.name}</div>
-          <div className="mt-1 text-sm text-sky-300">+{formatPalium(s.victory.gain)} Палиум</div>
-          <div className="mt-1 text-[11px] text-zinc-500">Всего лута: {formatPalium(s.lootPalium)} Палиум</div>
-          <button
-            type="button"
-            onClick={onContinue}
-            className="mt-4 w-full rounded-xl py-3 text-sm font-bold text-white"
-            style={{ background: def.color }}
-          >
-            {s.victory.final ? 'Забрать лут и выйти' : 'Следующий враг'}
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const victory = s.ui === 'victory' && s.victory;
 
   return (
     <div className="space-y-3">
@@ -302,7 +283,16 @@ function BreachCombat({
       </div>
       <div className="text-center text-[10px] text-zinc-500">{s.name}</div>
 
-      <div className="rounded-xl border bg-zinc-900/80 p-4 text-center" style={{ borderColor: `${def.color}66` }}>
+      <div className="rounded-xl border bg-zinc-900/80 p-4 text-center" style={{ borderColor: victory ? '#f59e0b66' : `${def.color}66` }}>
+        {victory ? (
+          <>
+            <div className="font-display text-sm tracking-widest text-amber-300">ПОБЕДА</div>
+            <div className="mt-2 text-lg text-zinc-100">{s.victory.name}</div>
+            <div className="mt-1 text-sm text-sky-300">+{formatPalium(s.victory.gain)} Палиум</div>
+            <div className="mt-1 text-[11px] text-zinc-500">Всего лута: {formatPalium(s.lootPalium)} Палиум</div>
+          </>
+        ) : (
+          <>
         {intent && (
           <div className="mb-2 rounded-lg border border-zinc-700 bg-black/40 px-2 py-1.5 text-[11px] font-bold text-zinc-200">
             Намерение: {intent.icon} {intent.label}
@@ -324,6 +314,8 @@ function BreachCombat({
         <div className="mt-1 text-xs tabular-nums text-zinc-400">
           HP {enemy.hp}/{enemy.maxHp}
         </div>
+          </>
+        )}
       </div>
 
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-3">
@@ -358,35 +350,41 @@ function BreachCombat({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 grid grid-cols-2 gap-2 rounded-xl bg-void/95 p-1 backdrop-blur-sm">
         <button
           type="button"
-          onClick={onStrike}
-          disabled={ap < strikeCost}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={victory ? onContinue : onStrike}
+          disabled={!victory && ap < strikeCost}
           className="rounded-xl py-3 text-xs font-bold text-white disabled:opacity-40"
-          style={{ background: def.color }}
+          style={{ background: victory ? '#d97706' : def.color }}
         >
-          Атака ({strikeCost} AP)
+          {victory ? (s.victory.final ? 'Забрать лут' : 'Следующий враг') : `Атака (${strikeCost} AP)`}
         </button>
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onDefend}
-          disabled={ap < 1}
+          disabled={victory || ap < 1}
           className="rounded-xl border border-zinc-600 bg-zinc-900 py-3 text-xs font-bold text-zinc-200 disabled:opacity-40"
         >
           {gear.hasShield ? 'Блок щитом' : 'Защитная стойка'} (1 AP)
         </button>
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onEndTurn}
-          className="rounded-xl border border-amber-500/40 bg-amber-500/10 py-3 text-xs font-bold text-amber-300"
+          disabled={victory}
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 py-3 text-xs font-bold text-amber-300 disabled:opacity-40"
         >
           Конец хода
         </button>
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onFlee}
-          className="rounded-xl border border-zinc-700 py-3 text-xs font-bold text-zinc-400"
+          disabled={victory}
+          className="rounded-xl border border-zinc-700 py-3 text-xs font-bold text-zinc-400 disabled:opacity-40"
         >
           Отступить
         </button>
@@ -394,8 +392,9 @@ function BreachCombat({
       {isMageWeapon(player) && (
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onBarrier}
-          disabled={ap < 1}
+          disabled={victory || ap < 1}
           className="w-full rounded-xl border border-sky-400/40 bg-sky-400/10 py-2.5 text-xs font-bold text-sky-200 disabled:opacity-40"
         >
           Барьер (1 AP){s.barrierCut ? ' · готов' : ''}

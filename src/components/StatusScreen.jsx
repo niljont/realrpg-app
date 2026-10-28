@@ -24,6 +24,7 @@ import {
 } from '../lib/equipment';
 import { ITEMS, invCount, listInventory } from '../lib/world';
 import DailyBoard from './DailyBoard';
+import EngagementBoard from './EngagementBoard';
 import GearCompare from './GearCompare';
 
 function EquipSlot({ label, item, locked, onClick }) {
@@ -473,6 +474,8 @@ export default function StatusScreen({
   onOpenRequestHandled,
   onClaimContract,
   onClaimReturn,
+  onPickWeekGoal,
+  onClaimWeekChest,
 }) {
   const stats = getStats(player);
   const [panel, setPanel] = useState(null);
@@ -499,6 +502,7 @@ export default function StatusScreen({
         onClaimContract={onClaimContract}
         onClaimReturn={onClaimReturn}
       />
+      <EngagementBoard player={player} onPickWeekGoal={onPickWeekGoal} onClaimWeekChest={onClaimWeekChest} />
       <section className="system-panel grid grid-cols-2 gap-2 p-3">
         <button
           type="button"

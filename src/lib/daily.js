@@ -1,4 +1,5 @@
 import { bagFreeSlots } from './equipment';
+import { rollEngagement, weekChestReward, weekGoalOption } from './engagement';
 import { addPalium, checkAchievements, dayKey, formatPalium, levelFromXp } from './game';
 import { rollGeneratedItem } from './loot';
 import { supabase } from './supabase';
@@ -141,6 +142,12 @@ export function ensureDaily(p, now = Date.now()) {
     changed = true;
   }
 
+  const engaged = rollEngagement(next, today);
+  if (engaged.changed) {
+    next = engaged.player;
+    changed = true;
+  }
+
   const gap = daysBetween(next.lastActiveDate, today);
   if (gap >= 2 && next.returnOffer?.date !== today) {
     next = { ...next, returnOffer: { date: today, gap, done: false, claimed: false } };
@@ -279,6 +286,20 @@ export function claimContract(p, now = Date.now()) {
   player = { ...player, attendance };
   const sealed = checkAchievements(player, events);
   return { player: sealed, events };
+}
+
+/** Сундук личной цели. Появляется в понедельник, если планка закрыта. */
+export function claimWeekChest(p, now = Date.now()) {
+  const today = dayKey(now);
+  const playerNow = rollEngagement(ensureDaily(p, now).player, today).player;
+  const chest = playerNow.weekChest;
+  if (!chest?.id) return { error: 'Сундук ещё не готов. Он открывается в понедельник' };
+  const option = weekGoalOption(chest.id);
+  const reward = weekChestReward(chest.target, option?.tiers);
+  const opened = giveChest(playerNow, reward);
+  const events = [{ type: 'title', text: `Цель недели: ${chest.name}` }, ...opened.events];
+  const player = checkAchievements({ ...opened.player, weekChest: null }, events);
+  return { player, events };
 }
 
 export function claimReturn(p, now = Date.now()) {
