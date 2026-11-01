@@ -479,6 +479,7 @@ export default function StatusScreen({
 }) {
   const stats = getStats(player);
   const [panel, setPanel] = useState(null);
+  const [bagOpen, setBagOpen] = useState(false);
   const [titlesTab, setTitlesTab] = useState(titlesInitialTab);
 
   useEffect(() => {
@@ -503,38 +504,49 @@ export default function StatusScreen({
         onClaimReturn={onClaimReturn}
       />
       <EngagementBoard player={player} onPickWeekGoal={onPickWeekGoal} onClaimWeekChest={onClaimWeekChest} />
-      <section className="system-panel grid grid-cols-2 gap-2 p-3">
+      <section className="system-panel space-y-2 p-3">
         <button
           type="button"
-          onClick={() => setPanel('inventory')}
-          className="flex items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 py-3 text-xs font-bold text-amber-300"
+          onClick={() => setBagOpen((open) => !open)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 py-3 text-xs font-bold text-amber-300"
         >
-          <Backpack size={16} /> Инвентарь
+          <Backpack size={16} /> Сумка
         </button>
-        <button
-          type="button"
-          onClick={() => setPanel('shop')}
-          className="flex items-center justify-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 py-3 text-xs font-bold text-sky-300"
-        >
-          <Store size={16} /> Магазин
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setTitlesTab('titles');
-            setPanel('titles');
-          }}
-          className="flex items-center justify-center gap-2 rounded-xl border border-yellow-500/40 bg-yellow-500/10 py-3 text-xs font-bold text-yellow-300"
-        >
-          <Trophy size={16} /> Титулы
-        </button>
-        <button
-          type="button"
-          onClick={() => setPanel('analytics')}
-          className="flex items-center justify-center gap-2 rounded-xl border border-violet-500/40 bg-violet-500/10 py-3 text-xs font-bold text-violet-300"
-        >
-          <BarChart3 size={16} /> Графики
-        </button>
+        {bagOpen && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPanel('inventory')}
+              className="flex items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 py-2.5 text-xs font-bold text-amber-300"
+            >
+              <Backpack size={14} /> Инвентарь
+            </button>
+            <button
+              type="button"
+              onClick={() => setPanel('shop')}
+              className="flex items-center justify-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 py-2.5 text-xs font-bold text-sky-300"
+            >
+              <Store size={14} /> Магазин
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTitlesTab('titles');
+                setPanel('titles');
+              }}
+              className="flex items-center justify-center gap-2 rounded-xl border border-yellow-500/40 bg-yellow-500/10 py-2.5 text-xs font-bold text-yellow-300"
+            >
+              <Trophy size={14} /> Титулы
+            </button>
+            <button
+              type="button"
+              onClick={() => setPanel('analytics')}
+              className="flex items-center justify-center gap-2 rounded-xl border border-violet-500/40 bg-violet-500/10 py-2.5 text-xs font-bold text-violet-300"
+            >
+              <BarChart3 size={14} /> Графики
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="system-panel p-4">

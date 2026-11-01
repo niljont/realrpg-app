@@ -35,9 +35,10 @@ export const EXERCISES = {
   ],
   END: [
     { id: 'abs', name: 'Пресс', unit: 'повт.', rate: 1 },
-    { id: 'plank', name: 'Планка', unit: 'сек', rate: 0.5 },
+    { id: 'plank', name: 'Планка', unit: 'сек', rate: 0.25 },
     { id: 'climbroute', name: 'Скалодром: трудность', unit: 'трасса', rate: 10, loadDifficulty: true, climb: { END: 10, STR: 4, AGI: 2 } },
     { id: 'run', name: 'Бег', unit: 'км', rate: 50, step: 0.1 },
+    { id: 'cardio', name: 'Кардио', unit: 'мин', rate: 1 },
   ],
   AGI: [
     { id: 'jumprope', name: 'Скакалка', unit: 'мин', rate: 5 },
@@ -50,7 +51,7 @@ export const EXERCISES = {
     { id: 'study', name: 'Учёба', unit: 'мин', rate: 1.5 },
     { id: 'languages', name: 'Языки', unit: 'мин', rate: 1.5 },
     { id: 'drawing', name: 'Рисование', unit: 'мин', rate: 1.5 },
-    { id: 'chess', name: 'Партия шахмат', unit: 'парт.', rate: 10 },
+    { id: 'chess', name: 'Партия шахмат', unit: 'парт.', rate: 15 },
   ],
   WIL: [
     { id: 'meditation', name: 'Медитация', unit: 'мин', rate: 2 },

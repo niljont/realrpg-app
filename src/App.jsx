@@ -660,22 +660,24 @@ export default function App() {
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-neon/20 bg-void/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
-          <div className="mx-auto flex max-w-md gap-0.5 overflow-x-auto px-1">
+          <div className="mx-auto flex max-w-md">
             {TABS.map(({ id, label, Icon }) => {
               const active = tab === id;
               return (
                 <button
                   key={id}
+                  type="button"
+                  aria-label={label}
                   onClick={() => setTab(id)}
-                  className={`flex min-w-[3.25rem] flex-1 flex-col items-center gap-0.5 py-2 text-[8px] font-bold tracking-wider transition ${active ? 'text-neon' : 'text-zinc-500'}`}
+                  className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-2 text-[9px] font-bold leading-none transition ${active ? 'text-neon' : 'text-zinc-500'}`}
                 >
                   <span className="relative">
-                    <Icon size={16} style={{ filter: active ? 'drop-shadow(0 0 6px #22d3ee)' : 'none' }} />
+                    <Icon size={18} style={{ filter: active ? 'drop-shadow(0 0 6px #22d3ee)' : 'none' }} />
                     {id === 'chat' && chatUnread && (
                       <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full border border-void bg-red-500 shadow-[0_0_6px_#ef4444]" />
                     )}
                   </span>
-                  {label}
+                  <span className="h-3 max-w-full truncate">{active ? label : ''}</span>
                 </button>
               );
             })}

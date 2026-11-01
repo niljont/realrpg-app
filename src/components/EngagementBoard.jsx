@@ -18,30 +18,18 @@ export default function EngagementBoard({ player, onPickWeekGoal, onClaimWeekChe
   const active = WEEK_GOALS.find((row) => row.id === picked) ?? WEEK_GOALS[0];
 
   return (
-    <section className="system-panel space-y-3 p-4">
+    <section className="system-panel space-y-2.5 p-3">
       <div className="flex items-center gap-2">
-        <Swords size={16} className="text-amber-300" />
-        <h2 className="font-display text-sm tracking-widest text-amber-200/90">ВЧЕРАШНИЙ СОПЕРНИК</h2>
+        <Flag size={14} className="text-neon" />
+        <h2 className="font-display text-sm tracking-widest text-neon/90">ДЕЛА</h2>
       </div>
-      {rival ? (
-        <p className="text-[11px] leading-relaxed text-zinc-300">
-          Вчера: {amountLabel(rival.amount, rival.unit)} · {rival.name}. Сегодня {amountLabel(todayAmount, rival.unit)}.
-          {score.beaten
-            ? ' Себя обогнал: до конца дня опыт +15%.'
-            : ' Обгони себя — и до конца дня опыт +15%.'}
-        </p>
-      ) : (
-        <p className="text-[11px] leading-relaxed text-zinc-500">
-          Соперник появляется утром, если вчера была тренировка. Бьёшь свой результат, не чужой.
-        </p>
-      )}
-
-      <div className="flex items-center gap-2 pt-1">
-        <Flag size={16} className="text-neon" />
-        <h2 className="font-display text-sm tracking-widest text-neon/90">ЦЕЛЬ НЕДЕЛИ</h2>
-      </div>
-      <p className="text-[10px] leading-relaxed text-zinc-500">
-        Только твоя. Сундук открывается в понедельник, если планка закрыта. Сменить цель на этой неделе нельзя.
+      <p className="flex items-start gap-2 text-[11px] leading-snug text-zinc-300">
+        <Swords size={12} className="mt-0.5 shrink-0 text-amber-300" />
+        <span>
+          {rival
+            ? `Вчера ${amountLabel(rival.amount, rival.unit)} · ${rival.name}. Сегодня ${amountLabel(todayAmount, rival.unit)}. ${score.beaten ? 'Опыт +15% до конца дня.' : 'Обгони себя — опыт +15% до конца дня.'}`
+            : 'Соперник появится утром, если вчера была тренировка.'}
+        </span>
       </p>
 
       {chest && (
