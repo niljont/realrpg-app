@@ -38,7 +38,7 @@ export const EXERCISES = {
     { id: 'plank', name: 'Планка', unit: 'сек', rate: 0.25 },
     { id: 'climbroute', name: 'Скалодром: трудность', unit: 'трасса', rate: 10, loadDifficulty: true, climb: { END: 10, STR: 4, AGI: 2 } },
     { id: 'run', name: 'Бег', unit: 'км', rate: 50, step: 0.1 },
-    { id: 'cardio', name: 'Кардио', unit: 'мин', rate: 1 },
+    { id: 'cardio', name: 'Кардио', unit: 'мин', rate: 1, loadDifficulty: true },
   ],
   AGI: [
     { id: 'jumprope', name: 'Скакалка', unit: 'мин', rate: 5 },
