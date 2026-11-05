@@ -60,7 +60,7 @@ import { craftRecipe } from './lib/crafting';
 import { applyHpRegen, buyGear, equipItem, unequipSlot } from './lib/equipment';
 import { ensureVendorStock } from './lib/loot';
 import { fetchChatMessages, readChatSeen, subscribeChat, writeChatSeen } from './lib/chat';
-import { applyDailyProgress, claimBossReward, claimContract, claimReturn, claimWeekChest, ensureDaily, isBossSpectator, strikeDailyBoss } from './lib/daily';
+import { applyDailyProgress, claimBossReward, claimContract, claimedBossDays, claimReturn, claimWeekChest, ensureDaily, fetchPendingBosses, isBossSpectator, strikeDailyBoss } from './lib/daily';
 import { pickWeekGoal } from './lib/engagement';
 import { touchPresence } from './lib/profileSync';
 import {
@@ -157,7 +157,6 @@ export default function App() {
   const [chatUnread, setChatUnread] = useState(false);
   const syncTimer = useRef(null);
   const playerRef = useRef(null);
-  const bossClaimDay = useRef('');
   playerRef.current = player;
 
   const notify = useCallback((events) => {
@@ -174,23 +173,42 @@ export default function App() {
     }
   }, []);
 
-  const grantFallenBoss = useCallback((state) => {
+  const grantFallenBoss = useCallback(async (state) => {
+    let current = playerRef.current;
+    if (!current || isBossSpectator(current.name)) return;
     const today = dayKey();
-    const current = playerRef.current;
-    if (!state || (state.hp ?? 1) > 0 || !current) return;
-    if (isBossSpectator(current.name)) return;
-    if ((state.mine ?? 0) <= 0) return;
-    if (current.bossClaimDate === today || bossClaimDay.current === today) return;
-    bossClaimDay.current = today;
-    const result = claimBossReward(current, state);
-    if (result.error) {
-      bossClaimDay.current = '';
-      return;
+    const [y, m, d] = today.split('-').map(Number);
+    const sinceDate = new Date(y, m - 1, d);
+    sinceDate.setDate(sinceDate.getDate() - 14);
+    const since = dayKey(sinceDate);
+    const rows = await fetchPendingBosses(since);
+    const extra = [current.bossSeen, state].filter((row) => row?.day && (row.hp ?? 1) <= 0 && (row.mine ?? 0) > 0);
+    const byDay = new Map();
+    for (const row of [...rows, ...extra]) {
+      if (row?.day) byDay.set(row.day, row);
     }
-    playerRef.current = result.player;
-    setPlayer(result.player);
-    if (result.reward) setBossReward(result.reward);
-    if (result.events?.length) notify(result.events);
+    const events = [];
+    let reward = null;
+    for (const row of byDay.values()) {
+      if (claimedBossDays(current).includes(row.day)) continue;
+      const result = claimBossReward(current, row);
+      if (result.error) continue;
+      current = result.player;
+      events.push(...(result.events ?? []));
+      reward = result.reward ?? reward;
+    }
+    const seen = state?.day
+      ? { day: state.day, name: state.name, hp: state.hp, maxHp: state.maxHp, mine: state.mine ?? 0 }
+      : current.bossSeen;
+    const seenSame = current.bossSeen?.day === seen?.day
+      && current.bossSeen?.hp === seen?.hp
+      && current.bossSeen?.mine === seen?.mine;
+    if (!events.length && seenSame) return;
+    current = { ...current, bossSeen: seen ?? null };
+    playerRef.current = current;
+    setPlayer(current);
+    if (reward) setBossReward(reward);
+    if (events.length) notify(events);
   }, [notify]);
 
   const commit = useCallback(

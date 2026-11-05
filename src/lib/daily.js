@@ -124,6 +124,13 @@ export function ensureDaily(p, now = Date.now()) {
     changed = true;
   }
 
+  if (next.daily?.date && next.daily.date !== today) {
+    const settled = payReadyRewards(next);
+    next = settled.player;
+    events.push(...settled.events);
+    changed = changed || settled.events.length > 0;
+  }
+
   if (next.daily?.date !== today) {
     const tasks = pickTasks(`${today}:${next.createdAt ?? next.name ?? ''}`);
     const stepsToday = next.steps?.date === today ? next.steps.today ?? 0 : 0;
@@ -145,6 +152,13 @@ export function ensureDaily(p, now = Date.now()) {
   const engaged = rollEngagement(next, today);
   if (engaged.changed) {
     next = engaged.player;
+    changed = true;
+  }
+
+  const readyNow = payReadyRewards(next);
+  if (readyNow.events.length) {
+    next = readyNow.player;
+    events.push(...readyNow.events);
     changed = true;
   }
 
@@ -195,7 +209,12 @@ export function applyDailyProgress(p, payload, now = Date.now()) {
     if (easyTrain || easySteps) next = { ...next, returnOffer: { ...next.returnOffer, done: true } };
   }
 
-  return { player: next, events: [], bossDamage: bossDamageFor(action, payload.amount) };
+  const readyNow = payReadyRewards(next);
+  return {
+    player: readyNow.player,
+    events: readyNow.events,
+    bossDamage: bossDamageFor(action, payload.amount),
+  };
 }
 
 function giveChest(p, { palium, rareChance = 0, uncommonChance = 0.35 }) {
@@ -230,12 +249,8 @@ export function contractReady(p) {
   return tasks.length > 0 && tasks.every((task) => task.done) && !p.daily.claimed;
 }
 
-export function claimContract(p, now = Date.now()) {
-  const today = dayKey(now);
-  const ensured = ensureDaily(p, now).player;
-  if (ensured.daily?.date !== today) return { error: 'Контракт ещё обновляется' };
-  if (!contractReady(ensured)) return { error: 'Контракт ещё не закрыт' };
-
+function payContract(ensured) {
+  const today = ensured.daily.date;
   const prev = { ...emptyAttendance(), ...(ensured.attendance ?? {}) };
   const yesterdayGap = daysBetween(prev.lastClosed, today);
   let streak = 1;
@@ -288,12 +303,50 @@ export function claimContract(p, now = Date.now()) {
   return { player: sealed, events };
 }
 
+/** Закрытые награды сами падают в сумку: контракт, возвращение, сундук недели. */
+function payReadyRewards(p) {
+  let player = p;
+  const events = [];
+  if (contractReady(player)) {
+    const paid = payContract(player);
+    player = paid.player;
+    events.push(...paid.events);
+  }
+  const offer = player.returnOffer;
+  if (offer?.done && !offer.claimed) {
+    const chest = giveChest(player, { palium: 0.06, uncommonChance: 0.35 });
+    player = { ...chest.player, returnOffer: { ...offer, claimed: true } };
+    events.push({ type: 'title', text: 'Возвращение принято' }, ...chest.events);
+  }
+  if (player.weekChest?.id) {
+    const chest = player.weekChest;
+    const option = weekGoalOption(chest.id);
+    const reward = weekChestReward(chest.target, option?.tiers);
+    const opened = giveChest(player, reward);
+    player = { ...opened.player, weekChest: null };
+    events.push({ type: 'title', text: `Цель недели: ${chest.name || option?.name || 'сундук'}` }, ...opened.events);
+  }
+  if (!events.length) return { player, events };
+  return { player: checkAchievements(player, events), events };
+}
+
+export function claimContract(p, now = Date.now()) {
+  const ensured = ensureDaily(p, now);
+  if (contractReady(ensured.player)) return payContract(ensured.player);
+  if (ensured.events?.length) return { player: ensured.player, events: ensured.events };
+  return { error: 'Контракт ещё не закрыт' };
+}
+
 /** Сундук личной цели. Появляется в понедельник, если планка закрыта. */
 export function claimWeekChest(p, now = Date.now()) {
   const today = dayKey(now);
-  const playerNow = rollEngagement(ensureDaily(p, now).player, today).player;
+  const ensured = ensureDaily(p, now);
+  const playerNow = rollEngagement(ensured.player, today).player;
   const chest = playerNow.weekChest;
-  if (!chest?.id) return { error: 'Сундук ещё не готов. Он открывается в понедельник' };
+  if (!chest?.id) {
+    if (ensured.events?.length) return { player: playerNow, events: ensured.events };
+    return { error: 'Сундук ещё не готов. Он открывается в понедельник' };
+  }
   const option = weekGoalOption(chest.id);
   const reward = weekChestReward(chest.target, option?.tiers);
   const opened = giveChest(playerNow, reward);
@@ -304,31 +357,57 @@ export function claimWeekChest(p, now = Date.now()) {
 
 export function claimReturn(p, now = Date.now()) {
   const today = dayKey(now);
-  const offer = p?.returnOffer;
+  const ensured = ensureDaily(p, now);
+  const offer = ensured.player?.returnOffer;
+  if (offer?.claimed && ensured.events?.length) return { player: ensured.player, events: ensured.events };
   if (!offer || offer.date !== today) return { error: 'Сейчас нет дела на возвращение' };
   if (offer.claimed) return { error: 'Награда уже получена' };
   if (!offer.done) return { error: 'Сначала тренировка или 1 000 шагов' };
-  const chest = giveChest(p, { palium: 0.06, uncommonChance: 0.35 });
+  const chest = giveChest(ensured.player, { palium: 0.06, uncommonChance: 0.35 });
   const events = [{ type: 'title', text: 'Возвращение принято' }, ...chest.events];
   const player = { ...chest.player, returnOffer: { ...offer, claimed: true } };
   return { player: checkAchievements(player, events), events };
 }
 
+export function claimedBossDays(p) {
+  const list = Array.isArray(p?.bossClaimedDays) ? p.bossClaimedDays.filter((day) => typeof day === 'string' && day) : [];
+  if (p?.bossClaimDate && !list.includes(p.bossClaimDate)) list.push(p.bossClaimDate);
+  return list;
+}
+
 export function claimBossReward(p, boss, now = Date.now()) {
+  const claimDay = boss?.day;
   const today = dayKey(now);
-  if (!boss || boss.day !== today) return { error: 'Босс дня ещё не загружен' };
+  if (!boss || !claimDay) return { error: 'Босс дня ещё не загружен' };
+  if (daysBetween(claimDay, today) > 14 || daysBetween(claimDay, today) < 0) return { error: 'Этот бой уже не оплачивается' };
   if (isBossSpectator(p?.name)) return { error: 'Этот аккаунт не участвует в бою' };
   if ((boss.hp ?? 1) > 0) return { error: 'Босс ещё жив' };
   if ((boss.mine ?? 0) <= 0) return { error: 'Нужен хотя бы один удар по боссу' };
-  if (p?.bossClaimDate === today) return { error: 'Награда босса уже получена' };
+  const claimed = claimedBossDays(p);
+  if (claimed.includes(claimDay)) return { error: 'Награда босса уже получена' };
   const chest = giveChest(p, { palium: 0.1, uncommonChance: 0.6, rareChance: 0.15 });
   const events = [{ type: 'title', text: `Босс дня пал: ${boss.name}` }, ...chest.events];
   const player = {
     ...chest.player,
-    bossClaimDate: today,
+    bossClaimDate: claimDay > (p.bossClaimDate || '') ? claimDay : (p.bossClaimDate || claimDay),
+    bossClaimedDays: [...claimed, claimDay].slice(-21),
     world: { ...(chest.player.world ?? {}), bossClaims: (p.world?.bossClaims ?? 0) + 1 },
   };
   return { player: checkAchievements(player, events), events, reward: chest.granted };
+}
+
+/** Бои за последние дни, где ты бил и босс уже мёртв. */
+export async function fetchPendingBosses(since) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) return [];
+    const { data, error } = await supabase.rpc('pending_boss_rewards', { p_since: since });
+    if (error || data == null) return [];
+    const body = typeof data === 'string' ? JSON.parse(data) : data;
+    return Array.isArray(body) ? body : [];
+  } catch {
+    return [];
+  }
 }
 
 const BOSS_SPECTATOR_NAMES = ['adminsha', 'админша'];

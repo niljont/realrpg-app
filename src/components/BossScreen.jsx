@@ -131,7 +131,7 @@ export default function BossScreen({ player, boss, onClaimBoss }) {
               </span>
             </div>
             <p className="text-[10px] leading-relaxed text-zinc-500">
-              Запас растёт только от тех, кто сегодня ударил: 450 HP на бойца. Награда одинаковая и только участникам — 0.100 Палиум и вещь вашего уровня, чаще зелёная.
+              Запас растёт только от тех, кто сегодня ударил: 450 HP на бойца. Добыча приходит сама всем, кто бил, даже если в момент победы тебя не было в сети.
             </p>
             {spectator && (
               <p className="text-[10px] leading-relaxed text-zinc-400">
